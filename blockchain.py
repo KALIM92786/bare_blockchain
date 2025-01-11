@@ -5,6 +5,8 @@ from time import time
 from urllib.parse import urlparse
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
+import logging
+logging.basicConfig(level=logging.INFO)
 
 SECRET_KEY = "your_shared_secret_key"  # Replace with your secure shared key
 
@@ -23,7 +25,8 @@ class Blockchain:
         :param secret_key: Shared secret for authentication.
         """
         if secret_key != SECRET_KEY:
-            raise ValueError("Unauthorized node registration.")
+    raise ValueError("Unauthorized node registration. Secret key mismatch.")
+
 
         parsed_url = urlparse(address)
         if parsed_url.netloc:
@@ -54,8 +57,8 @@ class Blockchain:
                     if length > max_length and self.validate_chain(chain):
                         max_length = length
                         new_chain = chain
-            except requests.exceptions.RequestException:
-                print(f"Node {node} is unreachable.")
+            except requests.exceptions.RequestException as e:
+    logging.error(f"Node {node} is unreachable: {e}")
 
         if new_chain:
             self.chain = new_chain
@@ -82,45 +85,36 @@ class Blockchain:
         self.chain.append(block)
         return block
 
-    def new_transaction(self, sender, recipient, amount, signature, public_key):
-        """
-        Creates a new transaction to go into the next mined Block.
-        :param sender: Address of the sender.
-        :param recipient: Address of the recipient.
-        :param amount: Amount to be transferred.
-        :param signature: Digital signature of the transaction.
-        :param public_key: Public key of the sender.
-        :return: Index of the block that will hold this transaction.
-        """
-        if not sender or not recipient or amount <= 0:
-            raise ValueError("Invalid transaction data.")
+def new_transaction(self, sender, recipient, amount, signature, public_key):
+    if not sender or not recipient or amount <= 0:
+        raise ValueError("Invalid transaction data.")
 
-        transaction_data = f"{sender}{recipient}{amount}".encode()
-        public_key_obj = serialization.load_pem_public_key(public_key.encode())
-        try:
-            public_key_obj.verify(
-                signature.encode(),
-                transaction_data,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-        except Exception:
-            raise ValueError("Invalid transaction signature.")
+    transaction_data = f"{sender}{recipient}{amount}".encode()
+    public_key_obj = serialization.load_pem_public_key(public_key.encode())
+    try:
+        public_key_obj.verify(
+            bytes.fromhex(signature),
+            transaction_data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+    except Exception:
+        raise ValueError("Invalid transaction signature.")
 
-        transaction = {
-            'sender': sender,
-            'recipient': recipient,
-            'amount': amount,
-            'timestamp': time(),
-            'id': hashlib.sha256(f"{sender}{recipient}{amount}{time()}".encode()).hexdigest(),
-            'signature': signature,
-            'public_key': public_key
-        }
-        self.current_transactions.append(transaction)
-        return self.last_block['index'] + 1
+    transaction = {
+        'sender': sender,
+        'recipient': recipient,
+        'amount': amount,
+        'timestamp': time(),
+        'id': hashlib.sha256(f"{sender}{recipient}{amount}{time()}".encode()).hexdigest(),
+        'signature': signature,
+        'public_key': public_key
+    }
+    self.current_transactions.append(transaction)
+    return self.last_block['index'] + 1
 
     @staticmethod
     def hash(block):
