@@ -1,3 +1,6 @@
+
+const apiUrl = "http://127.0.0.1:5000";
+
 let token = null;
 
 // Login to get the token

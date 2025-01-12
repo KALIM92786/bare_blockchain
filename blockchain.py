@@ -1,4 +1,3 @@
-# blockchain.py
 import requests
 import hashlib
 import json
@@ -6,13 +5,10 @@ from time import time
 from urllib.parse import urlparse
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import logging
 import base64
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
-
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,7 +31,7 @@ class Wallet:
         # Serialize the keys
         private_key_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,              
             encryption_algorithm=serialization.NoEncryption()
         )
         public_key_pem = public_key.public_bytes(
@@ -83,9 +79,20 @@ class Blockchain:
     def __init__(self):
         self.chain = []
         self.current_transactions = []
+        self.smart_contracts = []  # Store contracts
         self.nodes = set()
         # Create the genesis block
         self.new_block(previous_hash='1', proof=100)
+
+    def add_smart_contract(self, contract):
+        """Adds a new smart contract to the blockchain."""
+        self.smart_contracts.append(contract)
+        print(f"Smart contract added: {contract.sender} -> {contract.receiver} for {contract.amount} tokens")
+
+    def execute_contracts(self):
+        """Executes all stored smart contracts."""
+        for contract in self.smart_contracts:
+            contract.execute()
 
     def register_node(self, address, secret_key):
         if secret_key != SECRET_KEY:
@@ -95,29 +102,42 @@ class Blockchain:
         if parsed_url.netloc:
             self.nodes.add(parsed_url.netloc)
         elif parsed_url.path:
-            self.nodes.add(parsed_url.path)
+            self.nodes.add(parsed_url.path)          
         else:
             raise ValueError("Invalid URL")
 
     def new_transaction(self, sender, recipient, amount, signature, public_key):
-        if not sender or not recipient or amount <= 0:
-            raise ValueError("Invalid transaction data.")
-
-        transaction_data = f"{sender}{recipient}{amount}"
-        if not Wallet.verify_signature(public_key, transaction_data, signature):
-            raise ValueError("Invalid transaction signature.")
-
-        transaction = {
+        """
+        Creates a new transaction.
+        :param sender: The address of the sender.
+        :param recipient: The address of the recipient.
+        :param amount: The amount to transfer.
+        :param signature: The digital signature to verify the sender's identity.
+        :param public_key: The public key of the sender to verify the signature.
+        :return: The index of the block that will hold this transaction.
+        """
+        # Verify the signature
+        if not self.verify_signature(sender, signature, public_key):
+            raise ValueError("Invalid signature")
+        # Create a new transaction
+        self.current_transactions.append({
             'sender': sender,
             'recipient': recipient,
             'amount': amount,
-            'timestamp': time(),
-            'id': hashlib.sha256(f"{sender}{recipient}{amount}{time()}".encode()).hexdigest(),
-            'signature': signature,
-            'public_key': public_key
-        }
-        self.current_transactions.append(transaction)
-        return self.last_block['index'] + 1
+            'timestamp': time()
+        })
+        return self.last_block['index'] + 1  # Return the index of the next block to hold this transaction
+
+    def verify_signature(self, sender, signature, public_key):
+        """
+        Verifies a digital signature for a given message using the sender's public key. 
+        :param sender: The address of the sender.
+        :param signature: The digital signature.
+        :param public_key: The public key of the sender.
+        :return: True if the signature is valid, False otherwise.
+        """
+        message = f"{sender}{time()}"
+        return Wallet.verify_signature(public_key, message, signature)
 
     def new_block(self, proof, previous_hash=None):
         block = {
@@ -151,8 +171,7 @@ class Blockchain:
     def valid_proof(last_proof, proof):
         guess = f"{last_proof}{proof}".encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:4] == "0000"
-
+        return guess_hash[:4] == "0000"  
 
     def resolve_conflicts(self):
         """
@@ -175,7 +194,7 @@ class Blockchain:
                         max_length = length
                         new_chain = chain
             except requests.exceptions.RequestException as e:
-                print(f"Error connecting to node {node}: {e}")
+                logging.warning(f"Error connecting to node {node}: {e}")
 
         # Replace our chain if we discovered a new, valid chain longer than ours
         if new_chain:
@@ -184,8 +203,8 @@ class Blockchain:
 
         return False
 
-
 # Generate wallet keys (Example Usage)
 private_key, public_key = Wallet.generate_keys()
-print("Private Key:", private_key)
-print("Public Key:", public_key)
+logging.info("Private Key:\n" + private_key)
+logging.info("Public Key:\n" + public_key)
+

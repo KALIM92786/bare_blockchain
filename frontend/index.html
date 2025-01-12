@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockchain Front-End</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Add this inside the <body> tag -->
+<div id="loading-spinner" class="spinner" style="display: none;"></div>
+
+    <div class="container">
+        <h1>Blockchain Explorer</h1>
+
+        <div class="blockchain-info">
+            <button id="load-chain">Load Blockchain</button>
+            <div id="blockchain"></div>
+        </div>
+
+        <div class="transaction-form">
+            <h3>New Transaction</h3>
+            <form id="transaction-form">
+                <input type="text" id="sender" placeholder="Sender" required>
+                <input type="text" id="receiver" placeholder="Receiver" required>
+                <input type="number" id="amount" placeholder="Amount" required>
+                <button type="submit">Send Transaction</button>
+            </form>
+        </div>
+
+        <div class="mine-block">
+            <button id="mine-block">Mine Block</button>
+            <div id="mining-status"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

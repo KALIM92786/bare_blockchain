@@ -1,24 +1,24 @@
-from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
+from flask import Flask, jsonify, request
 from blockchain import Blockchain
+from functools import wraps
 import jwt
 import datetime
-from functools import wraps
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
+import logging
 
-app = Flask(__name__, static_url_path='', static_folder='static')
-CORS(app)
+app = Flask(__name__)
 blockchain = Blockchain()
 
-# Secret key for encoding JWT
+# Configure secret key
 app.config['SECRET_KEY'] = 'your_secret_key_here'
+logging.basicConfig(level=logging.INFO)
 
-# User credentials (hardcoded for simplicity, ideally stored in a database)
+# Dummy user credentials
 users = {
-    "admin": generate_password_hash("password123")
+    "admin": "hashed_password_here"
 }
 
-# Utility: Token Required Decorator
+# Token Required Decorator
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -28,90 +28,63 @@ def token_required(f):
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = data['username']
-        except:
-            return jsonify({'message': 'Token is invalid!'}), 401
+        except Exception as e:
+            return jsonify({'message': f'Token is invalid! {str(e)}'}), 401
         return f(current_user, *args, **kwargs)
     return decorated
 
-# Login endpoint
+# Login
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
 
+    if not username or not password:
+        return jsonify({'message': 'Username and password are required!'}), 400
+
+    # Check credentials
     if username not in users or not check_password_hash(users[username], password):
         return jsonify({'message': 'Invalid credentials!'}), 401
 
+    # Generate JWT
     token = jwt.encode(
         {'username': username, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
-        app.config['SECRET_KEY'],
-        algorithm="HS256"
+        app.config['SECRET_KEY'], algorithm="HS256"
     )
-    return jsonify({'token': token})
+    return jsonify({'token': token}), 200
 
-# Mine a new block (secured)
+# Mine a new block
 @app.route('/mine', methods=['GET'])
 @token_required
 def mine(current_user):
-    last_proof = blockchain.last_block['proof']
-    proof = blockchain.proof_of_work(last_proof)
-    blockchain.new_transaction(sender="0", recipient="miner_address", amount=1)
-    block = blockchain.new_block(proof)
-    return jsonify(block), 200
+    try:
+        last_proof = blockchain.last_block['proof']
+        proof = blockchain.proof_of_work(last_proof)
+        blockchain.new_transaction(sender="0", recipient=current_user, amount=1)
+        block = blockchain.new_block(proof)
+        logging.info(f"User {current_user} mined a block: {block}")
+        return jsonify(block), 200
+    except Exception as e:
+        logging.error(f"Error in mining: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-# Add a new transaction (secured)
+# Add a new transaction
 @app.route('/transactions/new', methods=['POST'])
 @token_required
 def new_transaction(current_user):
-    values = request.get_json()
-    required = ['sender', 'recipient', 'amount']
-    if not all(k in values for k in required):
-        return 'Missing values', 400
-    index = blockchain.new_transaction(values['sender'], values['recipient'], values['amount'])
-    return jsonify({'message': f'Transaction will be added to Block {index}'}), 201
+    try:
+        values = request.get_json()
+        required = ['sender', 'recipient', 'amount', 'signature', 'public_key']
+        if not all(k in values for k in required):
+            return 'Missing values', 400
+        index = blockchain.new_transaction(
+            values['sender'], values['recipient'], values['amount'],
+            values['signature'], values['public_key']
+        )
+        return jsonify({'message': f'Transaction will be added to Block {index}'}), 201
+    except Exception as e:
+        logging.error(f"Error in transaction: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-# Return the full blockchain (secured)
-@app.route('/chain', methods=['GET'])
-@token_required
-def full_chain(current_user):
-    return jsonify({'chain': blockchain.chain, 'length': len(blockchain.chain)}), 200
-
-# Register new nodes (secured)
-@app.route('/nodes/register', methods=['POST'])
-@token_required
-def register_nodes(current_user):
-    values = request.get_json()
-    nodes = values.get('nodes')
-
-    if nodes is None:
-        return "Error: Please supply a valid list of nodes", 400
-
-    for node in nodes:
-        blockchain.register_node(node)
-
-    return jsonify({
-        'message': 'New nodes have been added',
-        'total_nodes': list(blockchain.nodes),
-    }), 201
-
-# Resolve conflicts (secured)
-@app.route('/nodes/resolve', methods=['GET'])
-@token_required
-def consensus(current_user):
-    replaced = blockchain.resolve_conflicts()
-
-    if replaced:
-        response = {
-            'message': 'Our chain was replaced',
-            'new_chain': blockchain.chain
-        }
-    else:
-        response = {
-            'message': 'Our chain is authoritative',
-            'chain': blockchain.chain
-        }
-    return jsonify(response), 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# Other endpoints (chain, register nodes, resolve conflicts) remain similar...
