@@ -1,16 +1,10 @@
 from flask import Flask, jsonify, request
 from blockchain import Blockchain
 import logging
-import sys
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
-from flask_cors import CORS
-CORS(app)
 import os
-SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
-
-
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from cryptography.hazmat.backends import default_backend
+from flask_cors import CORS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,15 +32,16 @@ try:
 except Exception as e:
     logging.error(f"Error loading public key: {e}")
 
-# Create Flask app and blockchain
+# Create Flask app and enable CORS
 app = Flask(__name__)
-blockchain = Blockchain()
+CORS(app)
 
+# Initialize blockchain
+blockchain = Blockchain()
 
 @app.route('/')
 def index():
     return "Welcome to the Blockchain API!"
-
 
 @app.route('/mine', methods=['GET'])
 def mine():
@@ -71,7 +66,6 @@ def mine():
     }
     return jsonify(response), 200
 
-
 @app.route('/transactions/new', methods=['POST'])
 def new_transaction():
     values = request.get_json()
@@ -88,7 +82,6 @@ def new_transaction():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
-
 @app.route('/chain', methods=['GET'])
 def full_chain():
     response = {
@@ -96,7 +89,6 @@ def full_chain():
         'length': len(blockchain.chain),
     }
     return jsonify(response), 200
-
 
 @app.route('/nodes/register', methods=['POST'])
 def register_nodes():
@@ -110,7 +102,6 @@ def register_nodes():
 
     return jsonify({'message': 'New nodes have been added', 'total_nodes': list(blockchain.nodes)}), 201
 
-
 @app.route('/nodes/resolve', methods=['GET'])
 def resolve_conflicts():
     replaced = blockchain.resolve_conflicts()
@@ -120,7 +111,6 @@ def resolve_conflicts():
     else:
         response = {'message': 'Our chain is authoritative', 'chain': blockchain.chain}
     return jsonify(response), 200
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
