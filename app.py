@@ -1,79 +1,93 @@
 from flask import Flask, jsonify, request
 from blockchain import Blockchain
-from urllib.parse import urlparse
 import logging
 import sys
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from flask_cors import CORS
+CORS(app)
+import os
+SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 
-# Load private key at the start of your app
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Load private key
 try:
     with open("private_key.pem", "rb") as key_file:
         private_key = load_pem_private_key(
             key_file.read(),
-            password=None,  # Replace 'None' with the password if your key is encrypted
-            backend=default_backend()
+            password=None,
+            backend=default_backend(),
         )
-except (FileNotFoundError, ValueError) as e:
+    logging.info("Private key loaded successfully.")
+except Exception as e:
     logging.error(f"Error loading private key: {e}")
-    sys.exit(1)
 
-logging.basicConfig(level=logging.INFO)
+# Load public key
+try:
+    with open("public_key.pem", "rb") as key_file:
+        public_key = load_pem_public_key(
+            key_file.read(),
+            backend=default_backend(),
+        )
+    logging.info("Public key loaded successfully.")
+except Exception as e:
+    logging.error(f"Error loading public key: {e}")
 
+# Create Flask app and blockchain
 app = Flask(__name__)
-
-# Instantiate the Blockchain
 blockchain = Blockchain()
+
 
 @app.route('/')
 def index():
-    return "Welcome to the Bare Blockchain API!"
+    return "Welcome to the Blockchain API!"
+
 
 @app.route('/mine', methods=['GET'])
 def mine():
-    try:
-        logging.info("Starting mining process...")
-        last_proof = blockchain.last_block['proof']
-        proof = blockchain.proof_of_work(last_proof)
+    last_proof = blockchain.last_block['proof']
+    proof = blockchain.proof_of_work(last_proof)
 
-        blockchain.new_transaction(
-            sender="0",
-            recipient="your_address",  # Replace with your actual address
-            amount=1,
-            signature="dummy_signature",
-            public_key="dummy_public_key"
-        )
+    blockchain.new_transaction(
+        sender="0",
+        recipient="miner_address",
+        amount=1,
+        signature="dummy_signature",
+        public_key="dummy_public_key"
+    )
 
-        block = blockchain.new_block(proof)
-        response = {
-            'message': "New Block Forged",
-            'index': block['index'],
-            'transactions': block['transactions'],
-            'proof': block['proof'],
-            'previous_hash': block['previous_hash'],
-        }
-        return jsonify(response), 200
-    except Exception as e:
-        logging.error(f"Error in /mine: {e}")
-        return jsonify({'error': str(e)}), 500
+    block = blockchain.new_block(proof)
+    response = {
+        'message': "New Block Forged",
+        'index': block['index'],
+        'transactions': block['transactions'],
+        'proof': block['proof'],
+        'previous_hash': block['previous_hash'],
+    }
+    return jsonify(response), 200
+
 
 @app.route('/transactions/new', methods=['POST'])
 def new_transaction():
     values = request.get_json()
-
-    required = ['sender', 'recipient', 'amount']
+    required = ['sender', 'recipient', 'amount', 'signature', 'public_key']
     if not all(k in values for k in required):
-        return 'Missing values', 400
+        return jsonify({'error': 'Missing values'}), 400
 
     try:
         index = blockchain.new_transaction(
             values['sender'], values['recipient'], values['amount'],
             values['signature'], values['public_key']
         )
-        response = {'message': f'Transaction will be added to Block {index}'}
-        return jsonify(response), 201
+        return jsonify({'message': f'Transaction will be added to Block {index}'}), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
 
 @app.route('/chain', methods=['GET'])
 def full_chain():
@@ -83,28 +97,19 @@ def full_chain():
     }
     return jsonify(response), 200
 
+
 @app.route('/nodes/register', methods=['POST'])
 def register_nodes():
     values = request.get_json()
-    nodes_to_register = values.get('nodes')
+    nodes = values.get('nodes')
+    if nodes is None:
+        return jsonify({'error': 'Please supply a valid list of nodes'}), 400
 
-    if nodes_to_register is None:
-        return jsonify({'error': 'Please supply a list of nodes'}), 400
+    for node in nodes:
+        blockchain.register_node(node)
 
-    for node in nodes_to_register:
-        parsed_url = urlparse(node)
-        if parsed_url.netloc:
-            blockchain.nodes.add(parsed_url.netloc)
-        elif parsed_url.path:
-            blockchain.nodes.add(parsed_url.path)
-        else:
-            return jsonify({'error': 'Invalid URL'}), 400
+    return jsonify({'message': 'New nodes have been added', 'total_nodes': list(blockchain.nodes)}), 201
 
-    response = {
-        'message': 'New nodes have been added',
-        'total_nodes': list(blockchain.nodes)
-    }
-    return jsonify(response), 201
 
 @app.route('/nodes/resolve', methods=['GET'])
 def resolve_conflicts():
@@ -114,10 +119,8 @@ def resolve_conflicts():
         response = {'message': 'Our chain was replaced', 'new_chain': blockchain.chain}
     else:
         response = {'message': 'Our chain is authoritative', 'chain': blockchain.chain}
-
     return jsonify(response), 200
 
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=5000)

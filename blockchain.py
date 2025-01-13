@@ -8,17 +8,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 import logging
 import base64
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 logging.basicConfig(level=logging.INFO)
 
-SECRET_KEY = "your_shared_secret_key"  # Replace with a secure shared key
+SECRET_KEY = "your_shared_secret_key"
+
 
 class Wallet:
-    """
-    Handles key pair generation and transaction signing.
-    """
-
     @staticmethod
     def generate_keys():
         private_key = rsa.generate_private_key(
@@ -28,10 +24,9 @@ class Wallet:
         )
         public_key = private_key.public_key()
 
-        # Serialize the keys
         private_key_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,              
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         )
         public_key_pem = public_key.public_bytes(
@@ -75,69 +70,13 @@ class Wallet:
         except Exception:
             return False
 
+
 class Blockchain:
     def __init__(self):
         self.chain = []
         self.current_transactions = []
-        self.smart_contracts = []  # Store contracts
         self.nodes = set()
-        # Create the genesis block
         self.new_block(previous_hash='1', proof=100)
-
-    def add_smart_contract(self, contract):
-        """Adds a new smart contract to the blockchain."""
-        self.smart_contracts.append(contract)
-        print(f"Smart contract added: {contract.sender} -> {contract.receiver} for {contract.amount} tokens")
-
-    def execute_contracts(self):
-        """Executes all stored smart contracts."""
-        for contract in self.smart_contracts:
-            contract.execute()
-
-    def register_node(self, address, secret_key):
-        if secret_key != SECRET_KEY:
-            raise ValueError("Unauthorized node registration. Secret key mismatch.")
-
-        parsed_url = urlparse(address)
-        if parsed_url.netloc:
-            self.nodes.add(parsed_url.netloc)
-        elif parsed_url.path:
-            self.nodes.add(parsed_url.path)          
-        else:
-            raise ValueError("Invalid URL")
-
-    def new_transaction(self, sender, recipient, amount, signature, public_key):
-        """
-        Creates a new transaction.
-        :param sender: The address of the sender.
-        :param recipient: The address of the recipient.
-        :param amount: The amount to transfer.
-        :param signature: The digital signature to verify the sender's identity.
-        :param public_key: The public key of the sender to verify the signature.
-        :return: The index of the block that will hold this transaction.
-        """
-        # Verify the signature
-        if not self.verify_signature(sender, signature, public_key):
-            raise ValueError("Invalid signature")
-        # Create a new transaction
-        self.current_transactions.append({
-            'sender': sender,
-            'recipient': recipient,
-            'amount': amount,
-            'timestamp': time()
-        })
-        return self.last_block['index'] + 1  # Return the index of the next block to hold this transaction
-
-    def verify_signature(self, sender, signature, public_key):
-        """
-        Verifies a digital signature for a given message using the sender's public key. 
-        :param sender: The address of the sender.
-        :param signature: The digital signature.
-        :param public_key: The public key of the sender.
-        :return: True if the signature is valid, False otherwise.
-        """
-        message = f"{sender}{time()}"
-        return Wallet.verify_signature(public_key, message, signature)
 
     def new_block(self, proof, previous_hash=None):
         block = {
@@ -151,6 +90,18 @@ class Blockchain:
         self.current_transactions = []
         self.chain.append(block)
         return block
+
+    def new_transaction(self, sender, recipient, amount, signature, public_key):
+        if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
+            raise ValueError("Invalid signature")
+
+        self.current_transactions.append({
+            'sender': sender,
+            'recipient': recipient,
+            'amount': amount,
+            'timestamp': time()
+        })
+        return self.last_block['index'] + 1
 
     @staticmethod
     def hash(block):
@@ -171,40 +122,53 @@ class Blockchain:
     def valid_proof(last_proof, proof):
         guess = f"{last_proof}{proof}".encode()
         guess_hash = hashlib.sha256(guess).hexdigest()
-        return guess_hash[:4] == "0000"  
+        return guess_hash[:4] == "0000"
+
+    def validate_chain(self, chain=None):
+        chain = chain or self.chain
+        for i in range(1, len(chain)):
+            block = chain[i]
+            previous_block = chain[i - 1]
+
+            if block['previous_hash'] != self.hash(previous_block):
+                return False
+            if not self.valid_proof(previous_block['proof'], block['proof']):
+                return False
+        return True
 
     def resolve_conflicts(self):
-        """
-        Consensus Algorithm:
-        Resolves conflicts by replacing our chain with the longest one in the network.
-        """
-        neighbours = self.nodes  # Ensure nodes is a set of neighboring nodes
         new_chain = None
         max_length = len(self.chain)
 
-        for node in neighbours:
+        for node in self.nodes:
             try:
                 response = requests.get(f'http://{node}/chain')
                 if response.status_code == 200:
                     length = response.json()['length']
                     chain = response.json()['chain']
 
-                    # Check if the chain is longer and valid
                     if length > max_length and self.validate_chain(chain):
                         max_length = length
                         new_chain = chain
-            except requests.exceptions.RequestException as e:
-                logging.warning(f"Error connecting to node {node}: {e}")
+            except requests.RequestException:
+                continue
 
-        # Replace our chain if we discovered a new, valid chain longer than ours
         if new_chain:
             self.chain = new_chain
             return True
-
         return False
 
-# Generate wallet keys (Example Usage)
-private_key, public_key = Wallet.generate_keys()
-logging.info("Private Key:\n" + private_key)
-logging.info("Public Key:\n" + public_key)
+    def register_node(self, address):
+        parsed_url = urlparse(address)
+        if parsed_url.netloc:
+            self.nodes.add(parsed_url.netloc)
+        elif parsed_url.path:
+            self.nodes.add(parsed_url.path)
+        else:
+            raise ValueError("Invalid URL")
 
+
+# Generate keys for testing
+private_key, public_key = Wallet.generate_keys()
+logging.info(f"Private Key:\n{private_key}")
+logging.info(f"Public Key:\n{public_key}")
