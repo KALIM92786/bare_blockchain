@@ -1,21 +1,23 @@
-import unittest
 from time import time
-from blockchain import Blockchain, Wallet
-from smart_contract import SmartContract
 from smart_contract_base import SmartContract
 
-class SmartContract:
-    def __init__(self, sender, receiver, amount, condition):
-        self.sender = sender
-        self.receiver = receiver
-        self.amount = amount
-        self.condition = condition
-        self.status = "pending"
 
-    def execute(self):
-        if self.condition():
-            self.status = "executed"
-            return True
-        else:
-            self.status = "failed"
-            return False
+class AdvancedSmartContract(SmartContract):
+    def __init__(self, sender, receiver, amount, condition):
+        """
+        Inherits from SmartContract, adds advanced functionality.
+        """
+        super().__init__(sender, receiver, amount, condition)
+        self.timestamp = time()
+
+    def log_contract(self):
+        """
+        Logs the contract details for auditing purposes.
+        """
+        return {
+            "sender": self.sender,
+            "receiver": self.receiver,
+            "amount": self.amount,
+            "status": self.status,
+            "timestamp": self.timestamp
+        }
