@@ -1,6 +1,7 @@
-import requests
-import hashlib
+import os
 import json
+import hashlib
+import requests
 from time import time
 from urllib.parse import urlparse
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -12,6 +13,25 @@ import base64
 logging.basicConfig(level=logging.INFO)
 
 SECRET_KEY = "your_shared_secret_key"
+
+# List to store all tokens
+tokens = []
+
+class Token:
+    def __init__(self, name, symbol, initial_supply):
+        self.name = name
+        self.symbol = symbol
+        self.total_supply = initial_supply
+        self.balances = {}
+
+        # Allocate the total supply to the creator
+        self.balances["admin"] = initial_supply
+
+    def transfer(self, sender, recipient, amount):
+        if self.balances.get(sender, 0) < amount:
+            raise ValueError("Insufficient balance")
+        self.balances[sender] -= amount
+        self.balances[recipient] = self.balances.get(recipient, 0) + amount
 
 
 class Wallet:
@@ -76,7 +96,14 @@ class Blockchain:
         self.chain = []
         self.current_transactions = []
         self.nodes = set()
-        self.new_block(previous_hash='1', proof=100)
+        self.smart_contracts = {}  # New for smart contracts
+        
+        # Load data from file
+        self.load_data()
+        
+        # Ensure at least one block exists
+        if not self.chain:
+            self.new_block(previous_hash='1', proof=100)
 
     def new_block(self, proof, previous_hash=None):
         block = {
@@ -86,21 +113,24 @@ class Blockchain:
             'proof': proof,
             'previous_hash': previous_hash or self.hash(self.chain[-1]),
         }
-
         self.current_transactions = []
         self.chain.append(block)
+        self.save_data()  # Save blockchain state
         return block
 
-    def new_transaction(self, sender, recipient, amount, signature, public_key):
+    def new_transaction(self, sender, recipient, amount, signature, public_key, metadata=None):
         if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
             raise ValueError("Invalid signature")
 
-        self.current_transactions.append({
+        transaction = {
             'sender': sender,
             'recipient': recipient,
             'amount': amount,
-            'timestamp': time()
-        })
+            'timestamp': time(),
+            'metadata': metadata or {}  # Additional IoT metadata
+        }
+        self.current_transactions.append(transaction)
+        self.save_data()  # Save blockchain state
         return self.last_block['index'] + 1
 
     @staticmethod
@@ -124,40 +154,6 @@ class Blockchain:
         guess_hash = hashlib.sha256(guess).hexdigest()
         return guess_hash[:4] == "0000"
 
-    def validate_chain(self, chain=None):
-        chain = chain or self.chain
-        for i in range(1, len(chain)):
-            block = chain[i]
-            previous_block = chain[i - 1]
-
-            if block['previous_hash'] != self.hash(previous_block):
-                return False
-            if not self.valid_proof(previous_block['proof'], block['proof']):
-                return False
-        return True
-
-    def resolve_conflicts(self):
-        new_chain = None
-        max_length = len(self.chain)
-
-        for node in self.nodes:
-            try:
-                response = requests.get(f'http://{node}/chain')
-                if response.status_code == 200:
-                    length = response.json()['length']
-                    chain = response.json()['chain']
-
-                    if length > max_length and self.validate_chain(chain):
-                        max_length = length
-                        new_chain = chain
-            except requests.RequestException:
-                continue
-
-        if new_chain:
-            self.chain = new_chain
-            return True
-        return False
-
     def register_node(self, address):
         parsed_url = urlparse(address)
         if parsed_url.netloc:
@@ -166,6 +162,76 @@ class Blockchain:
             self.nodes.add(parsed_url.path)
         else:
             raise ValueError("Invalid URL")
+
+    def new_token_transaction(self, sender, recipient, amount, token):
+        if sender not in token.balances:
+            raise ValueError("Sender does not own this token")
+        token.transfer(sender, recipient, amount)
+
+        self.current_transactions.append({
+            'sender': sender,
+            'recipient': recipient,
+            'amount': amount,
+            'token': token.symbol,
+            'timestamp': time()
+        })
+        self.save_data()  # Save blockchain and token state
+        return self.last_block['index'] + 1
+
+    def deploy_smart_contract(self, contract_id, contract_code):
+        self.smart_contracts[contract_id] = contract_code
+        return True
+
+    def execute_contract(self, contract_id, method, args):
+        if contract_id not in self.smart_contracts:
+            raise ValueError("Contract not found")
+        contract = self.smart_contracts[contract_id]
+        exec(contract, globals())  # Warning: Use a safe execution method in production!
+        return eval(f"{method}(**args)")
+
+    def analyze_transactions(self):
+        suspicious_transactions = [
+            tx for block in self.chain for tx in block['transactions'] if tx['amount'] > 10000
+        ]
+        return suspicious_transactions
+
+    def save_data(self):
+        """Save blockchain, current transactions, and tokens to a JSON file."""
+        data = {
+            'chain': self.chain,
+            'current_transactions': self.current_transactions,
+            'tokens': [
+                {
+                    'name': token.name,
+                    'symbol': token.symbol,
+                    'total_supply': token.total_supply,
+                    'balances': token.balances
+                } for token in tokens
+            ]
+        }
+        with open('blockchain.json', 'w') as file:
+            json.dump(data, file, indent=4)
+
+    def load_data(self):
+        """Load blockchain, current transactions, and tokens from a JSON file."""
+        try:
+            with open('blockchain.json', 'r') as file:
+                data = json.load(file)
+                self.chain = data.get('chain', [])
+                self.current_transactions = data.get('current_transactions', [])
+                
+                global tokens
+                tokens = [
+                    Token(
+                        token_data['name'],
+                        token_data['symbol'],
+                        token_data['total_supply']
+                    ) for token_data in data.get('tokens', [])
+                ]
+                for token, token_data in zip(tokens, data.get('tokens', [])):
+                    token.balances = token_data['balances']
+        except FileNotFoundError:
+            logging.info("No blockchain.json file found. Starting with a new blockchain.")
 
 
 # Generate keys for testing
