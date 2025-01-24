@@ -12,7 +12,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 from sklearn.ensemble import IsolationForest
 import base64
-import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +26,6 @@ cloudinary.config(
     api_secret="your-api-secret"
 )
 
-
 class Blockchain:
     def __init__(self):
         self.chain = []
@@ -35,7 +33,7 @@ class Blockchain:
         self.tokens = []
         self.nodes = set()
         self.smart_contracts = {}
-        self.db = sqlite3.connect(DATABASE_FILE)
+        self.db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         self.initialize_database()
         self.load_data()
 
@@ -165,7 +163,6 @@ class Blockchain:
     def last_block(self):
         return self.chain[-1]
 
-
 class Token:
     def __init__(self, name, symbol, total_supply):
         self.name = name
@@ -246,9 +243,3 @@ class Wallet:
             return True
         except Exception:
             return False
-
-
-# Generate test keys
-private_key, public_key = Wallet.generate_keys()
-logging.info(f"Private Key:\n{private_key}")
-logging.info(f"Public Key:\n{public_key}")
