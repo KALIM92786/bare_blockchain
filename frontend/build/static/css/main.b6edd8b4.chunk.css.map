@@ -1,0 +1,1 @@
+{"version":3,"sources":["styles.css"],"names":[],"mappings":"AAAA,KACE,4BAA8B,CAC9B,wBACF,CAEA,GACE,aAAc,CACd,kBACF,CAEA,WACE,eACF","file":"main.b6edd8b4.chunk.css","sourcesContent":["body {\n  font-family: Arial, sans-serif;\n  background-color: #f8f9fa;\n}\n\nh1 {\n  color: #007bff;\n  margin-bottom: 1rem;\n}\n\n.container {\n  max-width: 900px;\n}\n"]}

@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from blockchain import Blockchain, Token
+from blockchain import Blockchain, Token, Wallet
 import logging
 import os
 import json
@@ -21,73 +21,41 @@ BLOCKCHAIN_FILE = "blockchain.json"
 
 # Helper function to save blockchain state
 def save_blockchain():
-    with open(BLOCKCHAIN_FILE, "w") as f:
-        data = {
-            "chain": blockchain.chain,
-            "current_transactions": blockchain.current_transactions,
-            "tokens": [
-                {
-                    "name": token.name,
-                    "symbol": token.symbol,
-                    "total_supply": token.total_supply,
-                    "balances": token.balances
-                } for token in blockchain.tokens
-            ]
-        }
-        json.dump(data, f, indent=4)
-
-
-# Helper function to load blockchain state
-def load_blockchain():
-    if os.path.exists(BLOCKCHAIN_FILE):
-        with open(BLOCKCHAIN_FILE, "r") as f:
-            data = json.load(f)
-            blockchain.chain = data.get("chain", [])
-            blockchain.current_transactions = data.get("current_transactions", [])
-
-            blockchain.tokens = [
-                Token(
-                    token_data["name"],
-                    token_data["symbol"],
-                    token_data["total_supply"]
-                ) for token_data in data.get("tokens", [])
-            ]
-            for token, token_data in zip(blockchain.tokens, data.get("tokens", [])):
-                token.balances = token_data["balances"]
-
-
-# Load blockchain state on startup
-load_blockchain()
+    blockchain.save_data()
 
 
 @app.route("/")
 def index():
-    return "Welcome to the Blockchain API!"
+    return "Welcome to the NextGen Blockchain API!"
 
 
 @app.route("/mine", methods=["GET"])
 def mine():
-    last_proof = blockchain.last_block["proof"]
-    proof = blockchain.proof_of_work(last_proof)
+    try:
+        last_proof = blockchain.last_block["proof"]
+        proof = blockchain.proof_of_work(last_proof)
 
-    blockchain.new_transaction(
-        sender="0",
-        recipient="miner_address",
-        amount=1,
-        signature="dummy_signature",
-        public_key="dummy_public_key"
-    )
+        blockchain.new_transaction(
+            sender="0",
+            recipient="miner_address",  # Replace with actual address
+            amount=1,
+            signature="dummy_signature",
+            public_key="dummy_public_key"
+        )
 
-    block = blockchain.new_block(proof)
-    save_blockchain()
-    response = {
-        "message": "New Block Forged",
-        "index": block["index"],
-        "transactions": block["transactions"],
-        "proof": block["proof"],
-        "previous_hash": block["previous_hash"],
-    }
-    return jsonify(response), 200
+        block = blockchain.new_block(proof)
+        save_blockchain()
+        response = {
+            "message": "New Block Forged",
+            "index": block["index"],
+            "transactions": block["transactions"],
+            "proof": block["proof"],
+            "previous_hash": block["previous_hash"],
+        }
+        return jsonify(response), 200
+    except Exception as e:
+        logging.error(f"Error during mining: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/transactions/new", methods=["POST"])
@@ -117,31 +85,14 @@ def full_chain():
     return jsonify(response), 200
 
 
-@app.route("/nodes/register", methods=["POST"])
-def register_nodes():
-    values = request.get_json()
-    nodes = values.get("nodes")
-    if nodes is None:
-        return jsonify({"error": "Please supply a valid list of nodes"}), 400
-
-    for node in nodes:
-        blockchain.register_node(node)
-
-    save_blockchain()
-    return jsonify({"message": "New nodes have been added", "total_nodes": list(blockchain.nodes)}), 201
-
-
-@app.route("/nodes/resolve", methods=["GET"])
-def resolve_conflicts():
-    replaced = blockchain.resolve_conflicts()
-
-    if replaced:
-        response = {"message": "Our chain was replaced", "new_chain": blockchain.chain}
-    else:
-        response = {"message": "Our chain is authoritative", "chain": blockchain.chain}
-
-    save_blockchain()
-    return jsonify(response), 200
+@app.route("/transactions/analyze", methods=["GET"])
+def analyze_transactions():
+    try:
+        suspicious = blockchain.analyze_transactions_with_ai()
+        return jsonify({"suspicious_transactions": suspicious}), 200
+    except Exception as e:
+        logging.error(f"Error analyzing transactions: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/smart-contract/deploy", methods=["POST"])
@@ -153,9 +104,13 @@ def deploy_contract():
     if not contract_id or not contract_code:
         return jsonify({"error": "Missing contract_id or contract_code"}), 400
 
-    blockchain.deploy_smart_contract(contract_id, contract_code)
-    save_blockchain()
-    return jsonify({"message": f"Smart contract {contract_id} deployed successfully"}), 200
+    try:
+        blockchain.deploy_smart_contract(contract_id, contract_code)
+        save_blockchain()
+        return jsonify({"message": f"Smart contract {contract_id} deployed successfully"}), 200
+    except Exception as e:
+        logging.error(f"Error deploying contract: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/smart-contract/execute", methods=["POST"])
@@ -171,14 +126,9 @@ def execute_contract():
     try:
         result = blockchain.execute_contract(contract_id, method, args)
         return jsonify({"result": result}), 200
-    except ValueError as e:
+    except Exception as e:
+        logging.error(f"Error executing contract: {str(e)}")
         return jsonify({"error": str(e)}), 400
-
-
-@app.route("/transactions/analyze", methods=["GET"])
-def analyze_transactions():
-    suspicious = blockchain.analyze_transactions()
-    return jsonify({"suspicious_transactions": suspicious}), 200
 
 
 @app.route("/tokens/create", methods=["POST"])

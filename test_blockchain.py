@@ -11,6 +11,11 @@ class TestBlockchain(unittest.TestCase):
         self.blockchain = Blockchain()
         self.private_key, self.public_key = Wallet.generate_keys()
 
+    def test_new_block(self):
+        proof = self.blockchain.proof_of_work(self.blockchain.last_block["proof"])
+        block = self.blockchain.new_block(proof)
+        self.assertEqual(block["index"], 2)
+
     def test_token_creation(self):
         """
         Test creating a new token and verifying its attributes.
@@ -42,6 +47,11 @@ class TestBlockchain(unittest.TestCase):
 
         index = self.blockchain.new_transaction(sender, recipient, amount, signature, self.public_key)
         self.assertEqual(index, self.blockchain.last_block["index"] + 1)
+
+    def test_analyze_transactions_with_ai(self):
+        self.blockchain.new_transaction("Alice", "Bob", 15000, "signature", "public_key")
+        suspicious = self.blockchain.analyze_transactions_with_ai()
+        self.assertGreater(len(suspicious), 0)
 
     def test_proof_of_work(self):
         """
@@ -77,6 +87,16 @@ def add(a, b):
         suspicious = self.blockchain.analyze_transactions()
         self.assertEqual(len(suspicious), 1)
         self.assertEqual(suspicious[0]["amount"], 15000)
+
+    def test_deploy_and_execute_smart_contract(self):
+        contract_id = "contract1"
+        contract_code = """
+def add(a, b):
+    return a + b
+"""
+        self.blockchain.deploy_smart_contract(contract_id, contract_code)
+        result = self.blockchain.execute_contract(contract_id, "add", {"a": 5, "b": 3})
+        self.assertEqual(result, 8)
 
 
 if __name__ == "__main__":
