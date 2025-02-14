@@ -12,6 +12,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 from sklearn.ensemble import IsolationForest
 import base64
+import tempfile
+import random  # New import for PoS validator selection
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,24 +23,26 @@ CLOUDINARY_FOLDER = "blockchain-backup"
 
 # Configure Cloudinary
 cloudinary.config(
-    cloud_name="your-cloud-name",
-    api_key="your-api-key",
-    api_secret="your-api-secret"
+    cloud_name="dcktfwqkb",
+    api_key="632313894921797",
+    api_secret="5FYfjr3ysJgtG6tKFONyRzVLl-U"
 )
 
 class Blockchain:
     def __init__(self):
         self.chain = []
         self.current_transactions = []
-        self.tokens = []
+        self.tokens = []  # List of Token objects
         self.nodes = set()
         self.smart_contracts = {}
+        self.stakes = {}  # New: mapping of user to staked amount
         self.db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         self.initialize_database()
         self.load_data()
 
+        # For genesis block, we create a block without a validator (or you could assign a default)
         if not self.chain:
-            self.new_block(previous_hash="1", proof=100)
+            self.new_block(previous_hash="1")
 
     def initialize_database(self):
         cursor = self.db.cursor()
@@ -52,12 +56,49 @@ class Blockchain:
         """)
         self.db.commit()
 
-    def new_block(self, proof, previous_hash=None):
+    def stake_tokens(self, user, amount):
+        """Allow a user to stake tokens for validator selection."""
+        # In a full implementation, you'd deduct tokens from the user's balance.
+        self.stakes[user] = self.stakes.get(user, 0) + amount
+        return {"message": f"{user} staked {amount} tokens."}
+
+    def select_validator(self):
+        """Randomly selects a validator based on their stake."""
+        if not self.stakes:
+            raise ValueError("No stakes available; no validator can be selected.")
+        total_stake = sum(self.stakes.values())
+        pick = random.uniform(0, total_stake)
+        current = 0
+        for user, stake in self.stakes.items():
+            current += stake
+            if current >= pick:
+                return user
+        return None
+
+    def new_block(self, previous_hash=None):
+        # Select a validator using the PoS mechanism
+        validator = self.select_validator()  # This selects based on stakes
+        if validator is None:
+            raise ValueError("No validator available to create a block.")
+
+        # Add a reward transaction for the validator (coinbase transaction)
+        # Since sender is "0", the signature check in new_transaction is bypassed.
+        reward_transaction = {
+            'sender': "0",
+            'recipient': validator,
+            'amount': 1,  # Define your reward amount here
+            'timestamp': time(),
+            'metadata': {'reward': True}
+        }
+        self.current_transactions.append(reward_transaction)
+        self.save_data()
+
+        # Now create the new block with the reward transaction included.
         block = {
             'index': len(self.chain) + 1,
             'timestamp': time(),
             'transactions': self.current_transactions,
-            'proof': proof,
+            'validator': validator,  # Record the chosen validator
             'previous_hash': previous_hash or self.hash(self.chain[-1]),
         }
         self.current_transactions = []
@@ -65,11 +106,11 @@ class Blockchain:
         self.save_data()
         self.backup_to_cloud()
         return block
-
     def new_transaction(self, sender, recipient, amount, signature, public_key, metadata=None):
-        if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
-            raise ValueError("Invalid signature")
-
+        # Allow coinbase transactions (sender "0") without signature check
+        if sender != "0":
+            if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
+                raise ValueError("Invalid signature")
         transaction = {
             'sender': sender,
             'recipient': recipient,
@@ -88,10 +129,8 @@ class Blockchain:
         ]
         if not transactions:
             return []
-
         model = IsolationForest(contamination=0.05)
         model.fit(transactions)
-
         anomalies = [
             block["transactions"][i]
             for block in self.chain
@@ -135,7 +174,7 @@ class Blockchain:
         if row:
             self.chain = json.loads(row[0])
             self.current_transactions = json.loads(row[1])
-            self.tokens = [Token.from_dict(json.loads(token)) for token in json.loads(row[2])]
+            self.tokens = [Token.from_dict(token) for token in row[2]] if isinstance(row[2], list) else []
         else:
             logging.info("No data found, starting fresh.")
 
@@ -145,9 +184,11 @@ class Blockchain:
             "current_transactions": self.current_transactions,
             "tokens": [token.to_dict() for token in self.tokens]
         }
-        backup_json = json.dumps(data, indent=4)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as temp_file:
+            json.dump(data, temp_file, indent=4)
+            temp_file_path = temp_file.name
         response = cloudinary.uploader.upload(
-            backup_json,
+            temp_file_path,
             resource_type="raw",
             folder=CLOUDINARY_FOLDER,
             public_id=f"blockchain_backup_{int(time())}"
@@ -190,7 +231,6 @@ class Token:
         token.balances = data["balances"]
         return token
 
-
 class Wallet:
     @staticmethod
     def generate_keys():
@@ -198,7 +238,6 @@ class Wallet:
             public_exponent=65537, key_size=2048, backend=default_backend()
         )
         public_key = private_key.public_key()
-
         private_key_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -243,3 +282,4 @@ class Wallet:
             return True
         except Exception:
             return False
+

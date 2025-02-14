@@ -1,1 +1,54 @@
-{"chain": [{"index": 1, "timestamp": 1736941275.5877042, "transactions": [], "proof": 100, "previous_hash": "1"}], "current_transactions": [{"sender": "admin", "recipient": "user1", "amount": 50, "token": "MTK", "timestamp": 1736941967.3792145}], "tokens": [{"name": "MyToken", "symbol": "MTK", "total_supply": "1000000", "balances": {"admin": "1000000"}}, {"name": "MyToken", "symbol": "MTK", "total_supply": 1000000, "balances": {"admin": 1000000}}]}
+{
+    "chain": [
+        {
+            "index": 1,
+            "timestamp": 1736941275.5877042,
+            "transactions": [],
+            "proof": 100,
+            "previous_hash": "1"
+        },
+        {
+            "index": 2,
+            "timestamp": 1739546445.154555,
+            "transactions": [
+                {
+                    "sender": "admin",
+                    "recipient": "user1",
+                    "amount": 50,
+                    "token": "MTK",
+                    "timestamp": 1736941967.3792145
+                },
+                {
+                    "sender": "0",
+                    "recipient": "alice",
+                    "amount": 1,
+                    "timestamp": 1739546445.1414309,
+                    "metadata": {
+                        "reward": true
+                    }
+                }
+            ],
+            "validator": "alice",
+            "previous_hash": "14e9dfcb87e99fb7c3a57f441ac3af6af7c83232437428f8a83bfacbe4a45276"
+        }
+    ],
+    "current_transactions": [],
+    "tokens": [
+        {
+            "name": "MyToken",
+            "symbol": "MTK",
+            "total_supply": "1000000",
+            "balances": {
+                "admin": "1000000"
+            }
+        },
+        {
+            "name": "MyToken",
+            "symbol": "MTK",
+            "total_supply": 1000000,
+            "balances": {
+                "admin": 1000000
+            }
+        }
+    ]
+}
