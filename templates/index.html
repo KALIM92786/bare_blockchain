@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Blockchain DApp Interface</title>
+</head>
+<body>
+    <h1>Blockchain DApp Interface</h1>
+    
+    <!-- Staking Section -->
+    <h2>Stake Tokens</h2>
+    <form id="stakeForm">
+        <label>Validator (User): <input type="text" id="user" required></label><br>
+        <label>Amount: <input type="number" id="amount" required></label><br>
+        <button type="submit">Stake</button>
+    </form>
+    <div id="stakeResult"></div>
+    
+    <!-- Block Creation Section -->
+    <h2>Create Block</h2>
+    <form id="blockForm">
+        <label>Block Data: <input type="text" id="blockData" required></label><br>
+        <button type="submit">Create Block</button>
+    </form>
+    <div id="blockResult"></div>
+    
+    <!-- Smart Contract Deployment Section -->
+    <h2>Deploy Smart Contract</h2>
+    <form id="deployForm">
+        <label>Contract ID: <input type="text" id="contractId" required></label><br>
+        <label>Contract Code (as string): <textarea id="contractCode" required></textarea></label><br>
+        <button type="submit">Deploy Contract</button>
+    </form>
+    <div id="deployResult"></div>
+    
+    <!-- Smart Contract Execution Section -->
+    <h2>Execute Smart Contract</h2>
+    <form id="executeForm">
+        <label>Contract ID: <input type="text" id="executeContractId" required></label><br>
+        <label>Method: <input type="text" id="method" required></label><br>
+        <label>Arguments (JSON): <input type="text" id="args" placeholder='{"key": "value"}' required></label><br>
+        <button type="submit">Execute Contract</button>
+    </form>
+    <div id="executeResult"></div>
+    
+    <script>
+        // Helper function to send POST requests
+        async function postData(url = '', data = {}) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            return response.json();
+        }
+        
+        // Staking Form Submission
+        document.getElementById('stakeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('user').value;
+            const amount = parseInt(document.getElementById('amount').value);
+            const result = await postData('/stake', { user, amount });
+            document.getElementById('stakeResult').innerText = JSON.stringify(result);
+        });
+        
+        // Block Creation Form Submission
+        document.getElementById('blockForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const blockData = document.getElementById('blockData').value;
+            const result = await postData('/new_block', { data: blockData });
+            document.getElementById('blockResult').innerText = JSON.stringify(result);
+        });
+        
+        // Deploy Smart Contract Form Submission
+        document.getElementById('deployForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const contractId = document.getElementById('contractId').value;
+            const contractCode = document.getElementById('contractCode').value;
+            const result = await postData('/smart-contract/deploy', { contract_id: contractId, contract_code: contractCode });
+            document.getElementById('deployResult').innerText = JSON.stringify(result);
+        });
+        
+        // Execute Smart Contract Form Submission
+        document.getElementById('executeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const contract_id = document.getElementById('executeContractId').value;
+            const method = document.getElementById('method').value;
+            let args;
+            try {
+                args = JSON.parse(document.getElementById('args').value);
+            } catch (error) {
+                alert("Invalid JSON in arguments");
+                return;
+            }
+            const result = await postData('/smart-contract/execute', { contract_id, method, args });
+            document.getElementById('executeResult').innerText = JSON.stringify(result);
+        });
+    </script>
+</body>
+</html>

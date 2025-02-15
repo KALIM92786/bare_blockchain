@@ -14,6 +14,7 @@ from sklearn.ensemble import IsolationForest
 import base64
 import tempfile
 import random  # New import for PoS validator selection
+from validator_expansion import Blockchain
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

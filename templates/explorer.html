@@ -1,0 +1,169 @@
+<!-- templates/explorer.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Blockchain Explorer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    button {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Blockchain Explorer</h1>
+
+    <!-- Section: Chain Overview -->
+    <h2>Blockchain (Blocks & Transactions)</h2>
+    <button onclick="fetchChain()">Refresh Chain</button>
+    <table id="chainTable">
+      <thead>
+        <tr>
+          <th>Index</th>
+          <th>Validator</th>
+          <th>Transactions</th>
+          <th>Previous Hash</th>
+          <th>Hash</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Blocks will be inserted here -->
+      </tbody>
+    </table>
+
+    <!-- Section: Stakes -->
+    <h2>Current Stakes</h2>
+    <button onclick="fetchStakes()">Refresh Stakes</button>
+    <table id="stakesTable">
+      <thead>
+        <tr>
+          <th>Validator</th>
+          <th>Stake</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Stakes will be inserted here -->
+      </tbody>
+    </table>
+
+    <!-- Section: Transactions -->
+    <h2>Transactions</h2>
+    <button onclick="fetchTransactions()">Refresh Transactions</button>
+    <table id="transactionsTable">
+      <thead>
+        <tr>
+          <th>Block Index</th>
+          <th>Sender</th>
+          <th>Recipient</th>
+          <th>Amount</th>
+          <th>Signature</th>
+          <th>Public Key</th>
+          <th>Metadata</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Transactions will be inserted here -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Fetch and display the entire chain
+    async function fetchChain() {
+      const res = await fetch('/chain');
+      const data = await res.json();
+      const chainTableBody = document.getElementById('chainTable').querySelector('tbody');
+      chainTableBody.innerHTML = '';
+
+      data.chain.forEach(block => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${block.index}</td>
+          <td>${block.validator || 'N/A'}</td>
+          <td>${JSON.stringify(block.transactions)}</td>
+          <td>${block.previous_hash}</td>
+          <td>${block.hash}</td>
+        `;
+        chainTableBody.appendChild(row);
+      });
+    }
+
+    // Fetch and display current stakes
+    async function fetchStakes() {
+      const res = await fetch('/stakes');
+      const data = await res.json();
+      const stakesTableBody = document.getElementById('stakesTable').querySelector('tbody');
+      stakesTableBody.innerHTML = '';
+      
+      for (const [validator, stake] of Object.entries(data.stakes)) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${validator}</td><td>${stake}</td>`;
+        stakesTableBody.appendChild(row);
+      }
+    }
+
+    // Fetch and display transactions from each block in the chain
+    async function fetchTransactions() {
+      const res = await fetch('/chain');
+      const data = await res.json();
+      const transactionsTableBody = document.getElementById('transactionsTable').querySelector('tbody');
+      transactionsTableBody.innerHTML = '';
+
+      data.chain.forEach(block => {
+        if (block.transactions && block.transactions.length > 0) {
+          block.transactions.forEach(tx => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${block.index}</td>
+              <td>${tx.sender}</td>
+              <td>${tx.recipient}</td>
+              <td>${tx.amount}</td>
+              <td>${tx.signature}</td>
+              <td>${tx.public_key}</td>
+              <td>${JSON.stringify(tx.metadata)}</td>
+            `;
+            transactionsTableBody.appendChild(row);
+          });
+        }
+      });
+    }
+
+    // Optionally, refresh data every 10 seconds
+    setInterval(() => {
+      fetchChain();
+      fetchStakes();
+      fetchTransactions();
+    }, 10000);
+
+    // Initial load
+    fetchChain();
+    fetchStakes();
+    fetchTransactions();
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from blockchain import Blockchain, Token
 import logging
 import os
@@ -56,7 +56,11 @@ load_blockchain()
 
 @app.route("/")
 def index():
-    return "Welcome to the PoS Blockchain API!"
+    return render_template('index.html')
+
+@app.route("/explorer")
+def explorer():
+    return render_template('explorer.html')
 
 @app.route("/new_block", methods=["GET"])
 def new_block():
