@@ -22,17 +22,28 @@ API_KEY = os.getenv("API_KEY", "default_api_key")  # Set your secret key
 logging.basicConfig(level=logging.INFO)
 
 # Load private key at startup (for signing transactions, if needed)
+private_key_path = "private_key.pem"
+private_key_data = None
+
+if os.path.exists(private_key_path):
+    with open(private_key_path, "rb") as key_file:
+        private_key_data = key_file.read()
+else:
+    env_key = os.environ.get("PRIVATE_KEY")
+    if env_key:
+        private_key_data = env_key.encode()
+    else:
+        logging.error("Error loading private key: No 'private_key.pem' file found and PRIVATE_KEY environment variable is not set.")
+        sys.exit(1)
 try:
-    with open("private_key.pem", "rb") as key_file:
-        private_key = load_pem_private_key(
-            key_file.read(),
-            password=None,  # Set password if your key is encrypted
-            backend=default_backend()
-        )
-except (FileNotFoundError, ValueError) as e:
+    private_key = load_pem_private_key(
+        private_key_data,
+        password=None,  # Set a password if your key is encrypted
+        backend=default_backend()
+    )
+except Exception as e:
     logging.error(f"Error loading private key: {e}")
     sys.exit(1)
-
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Resource Sharing
 
