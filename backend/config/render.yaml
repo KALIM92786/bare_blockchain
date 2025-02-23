@@ -11,7 +11,7 @@ services:
   apt-get update && apt-get install -y build-essential gcc libopenblas-dev liblapack-dev &&
   pip install --upgrade pip &&
   pip install -r backend/config/requirements.txt
-    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT app:app  # Fixed import path
+    startCommand: PYTHONPATH=$PYTHONPATH:$(pwd)/backend gunicorn -w 2 -b 0.0.0.0:$PORT backend.app:app  # Fixed import path
 
     envVars:
       - key: FLASK_ENV
