@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: blockchain-app
-    env: python
-    buildCommand: |
-      apt-get update && apt-get install -y build-essential gcc libopenblas-dev liblapack-dev
-      pip install --upgrade pip
-      pip install -r requirements.txt
-    startCommand: python app.py
