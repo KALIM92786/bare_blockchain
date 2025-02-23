@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, render_template
-from backend.blockchain import Blockchain, Token
+from blockchain import Blockchain, Token
 from urllib.parse import urlparse
 import logging
 import sys
@@ -10,7 +10,6 @@ from flask_cors import CORS
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 from web3 import Web3
-from blockchain import Blockchain, Token
 from validator_expansion import Blockchain as ExtendedBlockchain
 
 #This dynamically adds backend/ to Python’s module search path. force Python to recognize backend/
