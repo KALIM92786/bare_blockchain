@@ -36,18 +36,36 @@ CORS(app)  # Enable Cross-Origin Resource Sharing
 # Instantiate your custom Blockchain
 blockchain = Blockchain()
 
-# Connect to the local Hardhat node (for smart contract interaction)
-web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
-if web3.is_connected():
-    logging.info("Connected to local blockchain via Web3")
-else:
-    logging.error("Web3 connection failed")
+# Alchemy for Ethereum Blockchain Development
+# Connect to Alchemy Ethereum Node
+alchemy_url = "https://eth-mainnet.g.alchemy.com/v2/IIrjVj4cyzUBZNrNVwbuMexxWbcrecKd"
+w3 = Web3(Web3.HTTPProvider('https://eth-mainnet.g.alchemy.com/v2/IIrjVj4cyzUBZNrNVwbuMexxWbcrecKd'))
 
+if w3.is_connected():
+    print("✅ Successfully connected to Ethereum mainnet via Alchemy!")
+else:
+    print("❌ Connection failed")
+
+latest_block = w3.eth.block_number
+print(f"Latest Ethereum Block: {latest_block}")
+
+block = w3.eth.get_block(latest_block, full_transactions=True)
+print(block)
+
+# Connect to Hardhat local blockchain
+web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+if web3.is_connected():
+    logging.info("✅ Connected to local Hardhat blockchain!")
+else:
+    logging.error("❌ Web3 connection to Hardhat failed")
+
+# Function to load ABI from a file
 def load_abi(filename):
     """Load ABI from a file, extracting the 'abi' key if it exists."""
     with open(filename) as f:
         data = json.load(f)
-        return data["abi"] if "abi" in data else data
+        return data.get("abi", data)  # Safe extraction
 
 # Load BareCoin contract ABI and deployed address
 barecoin_abi = load_abi("barecoin_abi.json")
