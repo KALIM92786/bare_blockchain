@@ -13,7 +13,7 @@ from cryptography.hazmat.backends import default_backend
 import base64
 import tempfile
 import random  # PoS validator selection
-from validator_expansion import Blockchain as ExtendedBlockchain
+from backend.validator_expansion import Blockchain as ExtendedBlockchain
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
