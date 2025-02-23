@@ -1,59 +1,84 @@
 from flask import Flask, jsonify, request, render_template
 from blockchain import Blockchain, Token
+from urllib.parse import urlparse
 import logging
-import os
+import sys
 import json
+import os
+from dotenv import load_dotenv
 from flask_cors import CORS
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.backends import default_backend
+from web3 import Web3
+
+# Load environment variables (make sure to create a .env file with API_KEY)
+load_dotenv()
+API_KEY = os.getenv("API_KEY", "default_api_key")  # Set your secret key
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-app = Flask(__name__)
-CORS(app)
+# Load private key at startup (for signing transactions, if needed)
+try:
+    with open("private_key.pem", "rb") as key_file:
+        private_key = load_pem_private_key(
+            key_file.read(),
+            password=None,  # Set password if your key is encrypted
+            backend=default_backend()
+        )
+except (FileNotFoundError, ValueError) as e:
+    logging.error(f"Error loading private key: {e}")
+    sys.exit(1)
 
-# Initialize blockchain
+app = Flask(__name__)
+CORS(app)  # Enable Cross-Origin Resource Sharing
+
+# Instantiate your custom Blockchain
 blockchain = Blockchain()
 
-# Blockchain state file
-BLOCKCHAIN_FILE = "blockchain.json"
+# Connect to the local Hardhat node (for smart contract interaction)
+web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+if web3.is_connected():
+    logging.info("Connected to local blockchain via Web3")
+else:
+    logging.error("Web3 connection failed")
 
-# Helper function to save blockchain state
-def save_blockchain():
-    with open(BLOCKCHAIN_FILE, "w") as f:
-        data = {
-            "chain": blockchain.chain,
-            "current_transactions": blockchain.current_transactions,
-            "tokens": [
-                {
-                    "name": token.name,
-                    "symbol": token.symbol,
-                    "total_supply": token.total_supply,
-                    "balances": token.balances
-                } for token in blockchain.tokens
-            ]
-        }
-        json.dump(data, f, indent=4)
+def load_abi(filename):
+    """Load ABI from a file, extracting the 'abi' key if it exists."""
+    with open(filename) as f:
+        data = json.load(f)
+        return data["abi"] if "abi" in data else data
 
-# Helper function to load blockchain state
-def load_blockchain():
-    if os.path.exists(BLOCKCHAIN_FILE):
-        with open(BLOCKCHAIN_FILE, "r") as f:
-            data = json.load(f)
-            blockchain.chain = data.get("chain", [])
-            blockchain.current_transactions = data.get("current_transactions", [])
-            blockchain.tokens = [
-                Token(
-                    token_data["name"],
-                    token_data["symbol"],
-                    token_data["total_supply"]
-                ) for token_data in data.get("tokens", [])
-            ]
-            for token, token_data in zip(blockchain.tokens, data.get("tokens", [])):
-                token.balances = token_data["balances"]
+# Load BareCoin contract ABI and deployed address
+barecoin_abi = load_abi("barecoin_abi.json")
+barecoin_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"  # Update with your deployed BareCoin address
+barecoin_contract = web3.eth.contract(address=barecoin_address, abi=barecoin_abi)
 
-# Load blockchain state on startup
-load_blockchain()
+# Load StakingGovernance contract ABI and deployed address
+staking_abi = load_abi("staking_governance_abi.json")
+staking_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"  # Update with your deployed StakingGovernance address
+staking_contract = web3.eth.contract(address=staking_address, abi=staking_abi)
 
+# API key authentication decorator
+def require_api_key(f):
+    def decorated(*args, **kwargs):
+        key = request.headers.get("x-api-key")
+        if key != API_KEY:
+            return jsonify({"error": "Unauthorized"}), 403
+        return f(*args, **kwargs)
+    decorated.__name__ = f.__name__
+    return decorated
+
+# Global error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(error):
+    return jsonify({"error": "Server error"}), 500
+
+# Routes for rendering pages
 @app.route("/")
 def index():
     return render_template('index.html')
@@ -62,36 +87,46 @@ def index():
 def explorer():
     return render_template('explorer.html')
 
-@app.route("/new_block", methods=["GET"])
-def new_block():
+# Blockchain endpoints from your custom implementation
+@app.route("/mine", methods=["GET"])
+def mine():
     try:
-        previous_hash = blockchain.hash(blockchain.last_block)
-        block = blockchain.new_block(previous_hash=previous_hash)
+        logging.info("Starting mining process...")
+        last_proof = blockchain.last_block['proof']
+        proof = blockchain.proof_of_work(last_proof)
+        blockchain.new_transaction(
+            sender="0",
+            recipient="your_address",  # Replace with your actual address
+            amount=1,
+            signature="dummy_signature",
+            public_key="dummy_public_key"
+        )
+        block = blockchain.new_block(previous_hash=blockchain.hash(blockchain.last_block))
         response = {
-            "message": "New Block Created",
-            "index": block["index"],
-            "transactions": block["transactions"],
-            "validator": block["validator"],
-            "previous_hash": block["previous_hash"],
+            'message': "New Block Forged",
+            'index': block['index'],
+            'transactions': block['transactions'],
+            'proof': block['proof'],
+            'previous_hash': block['previous_hash'],
         }
-        save_blockchain()
         return jsonify(response), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Error in /mine: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/transactions/new", methods=["POST"])
 def new_transaction():
     values = request.get_json()
-    required = ["sender", "recipient", "amount", "signature", "public_key", "metadata"]
+    required = ["sender", "recipient", "amount", "signature", "public_key"]
     if not all(k in values for k in required):
         return jsonify({"error": "Missing values"}), 400
     try:
         index = blockchain.new_transaction(
             values["sender"], values["recipient"], values["amount"],
-            values["signature"], values["public_key"], values.get("metadata")
+            values["signature"], values["public_key"]
         )
-        save_blockchain()
-        return jsonify({"message": f"Transaction will be added to Block {index}"}), 201
+        response = {"message": f"Transaction will be added to Block {index}"}
+        return jsonify(response), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -104,6 +139,7 @@ def full_chain():
     return jsonify(response), 200
 
 @app.route("/nodes/register", methods=["POST"])
+@require_api_key
 def register_nodes():
     values = request.get_json()
     nodes = values.get("nodes")
@@ -111,17 +147,15 @@ def register_nodes():
         return jsonify({"error": "Please supply a valid list of nodes"}), 400
     for node in nodes:
         blockchain.nodes.add(node)
-    save_blockchain()
     return jsonify({"message": "New nodes have been added", "total_nodes": list(blockchain.nodes)}), 201
 
 @app.route("/nodes/resolve", methods=["GET"])
 def resolve_conflicts():
-    # For simplicity, we are returning the current chain.
     response = {"message": "Current chain", "chain": blockchain.chain}
-    save_blockchain()
     return jsonify(response), 200
 
 @app.route("/smart-contract/deploy", methods=["POST"])
+@require_api_key
 def deploy_contract():
     values = request.get_json()
     contract_id = values.get("contract_id")
@@ -129,10 +163,10 @@ def deploy_contract():
     if not contract_id or not contract_code:
         return jsonify({"error": "Missing contract_id or contract_code"}), 400
     blockchain.deploy_smart_contract(contract_id, contract_code)
-    save_blockchain()
     return jsonify({"message": f"Smart contract {contract_id} deployed successfully"}), 200
 
 @app.route("/smart-contract/execute", methods=["POST"])
+@require_api_key
 def execute_contract():
     values = request.get_json()
     contract_id = values.get("contract_id")
@@ -146,24 +180,83 @@ def execute_contract():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/stake", methods=["POST"])
-def stake():
-    values = request.get_json()
-    user = values.get("user")
-    amount = values.get("amount")
+# New endpoints for backend enhancements
+
+# 1. Get the latest block in the chain
+@app.route("/block/latest", methods=["GET"])
+def latest_block():
+    try:
+        block = blockchain.last_block
+        return jsonify(block), 200
+    except Exception as e:
+        logging.error(f"Error in /block/latest: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# 2. Get pending transactions (those not yet mined into a block)
+@app.route("/transactions/pending", methods=["GET"])
+def pending_transactions():
+    try:
+        transactions = blockchain.current_transactions
+        return jsonify(transactions), 200
+    except Exception as e:
+        logging.error(f"Error in /transactions/pending: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# 3. Stake tokens within the blockchain (internal staking, separate from smart contract staking)
+@app.route("/blockchain/stake_tokens", methods=["POST"])
+@require_api_key
+def stake_tokens():
+    data = request.get_json()
+    user = data.get("user")
+    amount = data.get("amount")
     if not user or amount is None:
         return jsonify({"error": "Missing user or amount"}), 400
     try:
-        response = blockchain.stake_tokens(user, amount)
-        save_blockchain()
-        return jsonify(response), 200
+        result = blockchain.stake_tokens(user, int(amount))
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# New endpoint to view current stakes
-@app.route("/stakes", methods=["GET"])
-def get_stakes():
-    return jsonify({"stakes": blockchain.stakes}), 200
+# Smart contract integration endpoints
+@app.route("/balance/<address>", methods=["GET"])
+def get_balance(address):
+    try:
+        balance = barecoin_contract.functions.balanceOf(address).call()
+        return jsonify({"balance": balance}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/staker/<address>", methods=["GET"])
+def get_staker(address):
+    try:
+        staker = staking_contract.functions.stakers(address).call()
+        return jsonify({
+            "amount": staker[0],
+            "reward": staker[1],
+            "lastStaked": staker[2]
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/stake", methods=["POST"])
+def stake():
+    data = request.get_json()
+    user = data.get("user")
+    amount = int(data.get("amount"))  # amount in wei
+    if not user or amount is None:
+        return jsonify({"error": "Missing user or amount"}), 400
+    try:
+        nonce = web3.eth.getTransactionCount(user)
+        tx = staking_contract.functions.stake(amount).buildTransaction({
+            'from': user,
+            'nonce': nonce,
+            'gas': 2000000,
+            'gasPrice': web3.toWei('50', 'gwei')
+        })
+        # For production: sign and send the transaction using web3.eth.account.signTransaction
+        return jsonify({"message": "Staking transaction built", "tx": tx}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)

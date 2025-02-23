@@ -10,11 +10,10 @@ from urllib.parse import urlparse
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
-from sklearn.ensemble import IsolationForest
 import base64
 import tempfile
-import random  # New import for PoS validator selection
-from validator_expansion import Blockchain
+import random  # PoS validator selection
+from validator_expansion import Blockchain as ExtendedBlockchain
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,12 +35,17 @@ class Blockchain:
         self.tokens = []  # List of Token objects
         self.nodes = set()
         self.smart_contracts = {}
-        self.stakes = {}  # New: mapping of user to staked amount
-        self.db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
-        self.initialize_database()
-        self.load_data()
-
-        # For genesis block, we create a block without a validator (or you could assign a default)
+        self.stakes = {}  # Mapping of user to staked amount
+        try:
+            self.db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+            self.initialize_database()
+            self.load_data()
+        except Exception as e:
+            logging.error(f"Database initialization error: {e}")
+            self.chain = []
+            self.current_transactions = []
+            self.tokens = []
+        # Create genesis block if chain is empty
         if not self.chain:
             self.new_block(previous_hash="1")
 
@@ -56,15 +60,20 @@ class Blockchain:
             )
         """)
         self.db.commit()
+        logging.info("Database initialized successfully.")
 
     def stake_tokens(self, user, amount):
         """Allow a user to stake tokens for validator selection."""
-        # In a full implementation, you'd deduct tokens from the user's balance.
-        self.stakes[user] = self.stakes.get(user, 0) + amount
-        return {"message": f"{user} staked {amount} tokens."}
+        try:
+            self.stakes[user] = self.stakes.get(user, 0) + amount
+            logging.info(f"{user} staked {amount} tokens.")
+            return {"message": f"{user} staked {amount} tokens."}
+        except Exception as e:
+            logging.error(f"Error staking tokens for {user}: {e}")
+            raise e
 
     def select_validator(self):
-        """Randomly selects a validator based on their stake."""
+        """Randomly select a validator based on their stake."""
         if not self.stakes:
             raise ValueError("No stakes available; no validator can be selected.")
         total_stake = sum(self.stakes.values())
@@ -73,55 +82,63 @@ class Blockchain:
         for user, stake in self.stakes.items():
             current += stake
             if current >= pick:
+                logging.info(f"Validator selected: {user}")
                 return user
+        logging.warning("Validator selection reached end without pick; defaulting to None")
         return None
 
     def new_block(self, previous_hash=None):
-        # Select a validator using the PoS mechanism
-        validator = self.select_validator()  # This selects based on stakes
-        if validator is None:
-            raise ValueError("No validator available to create a block.")
+        try:
+            validator = self.select_validator()
+            if validator is None:
+                raise ValueError("No validator available to create a block.")
+            # Add a reward (coinbase) transaction for the selected validator
+            reward_transaction = {
+                'sender': "0",
+                'recipient': validator,
+                'amount': 1,  # Set your reward amount
+                'timestamp': time(),
+                'metadata': {'reward': True}
+            }
+            self.current_transactions.append(reward_transaction)
+            self.save_data()
 
-        # Add a reward transaction for the validator (coinbase transaction)
-        # Since sender is "0", the signature check in new_transaction is bypassed.
-        reward_transaction = {
-            'sender': "0",
-            'recipient': validator,
-            'amount': 1,  # Define your reward amount here
-            'timestamp': time(),
-            'metadata': {'reward': True}
-        }
-        self.current_transactions.append(reward_transaction)
-        self.save_data()
+            block = {
+                'index': len(self.chain) + 1,
+                'timestamp': time(),
+                'transactions': self.current_transactions,
+                'validator': validator,
+                'previous_hash': previous_hash or self.hash(self.chain[-1]),
+            }
+            self.current_transactions = []
+            self.chain.append(block)
+            self.save_data()
+            self.backup_to_cloud()
+            logging.info(f"New block created: {block['index']}")
+            return block
+        except Exception as e:
+            logging.error(f"Error creating new block: {e}")
+            raise e
 
-        # Now create the new block with the reward transaction included.
-        block = {
-            'index': len(self.chain) + 1,
-            'timestamp': time(),
-            'transactions': self.current_transactions,
-            'validator': validator,  # Record the chosen validator
-            'previous_hash': previous_hash or self.hash(self.chain[-1]),
-        }
-        self.current_transactions = []
-        self.chain.append(block)
-        self.save_data()
-        self.backup_to_cloud()
-        return block
     def new_transaction(self, sender, recipient, amount, signature, public_key, metadata=None):
-        # Allow coinbase transactions (sender "0") without signature check
-        if sender != "0":
-            if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
-                raise ValueError("Invalid signature")
-        transaction = {
-            'sender': sender,
-            'recipient': recipient,
-            'amount': amount,
-            'timestamp': time(),
-            'metadata': metadata or {}
-        }
-        self.current_transactions.append(transaction)
-        self.save_data()
-        return self.last_block['index'] + 1
+        try:
+            if sender != "0":
+                if not Wallet.verify_signature(public_key, f"{sender}{amount}{recipient}", signature):
+                    raise ValueError("Invalid signature")
+            transaction = {
+                'sender': sender,
+                'recipient': recipient,
+                'amount': amount,
+                'timestamp': time(),
+                'metadata': metadata or {}
+            }
+            self.current_transactions.append(transaction)
+            self.save_data()
+            logging.info(f"New transaction added: {transaction}")
+            return self.last_block['index'] + 1 if self.chain else 1
+        except Exception as e:
+            logging.error(f"Error adding transaction: {e}")
+            raise e
 
     def analyze_transactions_with_ai(self):
         transactions = [
@@ -130,71 +147,96 @@ class Blockchain:
         ]
         if not transactions:
             return []
-        model = IsolationForest(contamination=0.05)
-        model.fit(transactions)
-        anomalies = [
-            block["transactions"][i]
-            for block in self.chain
-            for i, tx in enumerate(block["transactions"])
-            if model.predict([[tx["amount"], tx.get("metadata", {}).get("risk_score", 0)]]) == -1
-        ]
-        return anomalies
+        try:
+            from sklearn.ensemble import IsolationForest
+            model = IsolationForest(contamination=0.05)
+            model.fit(transactions)
+            anomalies = [
+                block["transactions"][i]
+                for block in self.chain
+                for i, tx in enumerate(block["transactions"])
+                if model.predict([[tx["amount"], tx.get("metadata", {}).get("risk_score", 0)]]) == -1
+            ]
+            logging.info(f"Anomalies detected: {anomalies}")
+            return anomalies
+        except Exception as e:
+            logging.error(f"Error analyzing transactions: {e}")
+            return []
 
     def deploy_smart_contract(self, contract_id, contract_code):
         self.smart_contracts[contract_id] = contract_code
+        logging.info(f"Smart contract deployed: {contract_id}")
         return True
 
     def execute_contract(self, contract_id, method, args):
         if contract_id not in self.smart_contracts:
             raise ValueError("Contract not found")
         contract_code = self.smart_contracts[contract_id]
-        exec(contract_code, globals())
-        return eval(f"{method}(**args)")
+        try:
+            exec(contract_code, globals())
+            result = eval(f"{method}(**args)")
+            logging.info(f"Executed contract {contract_id} method {method} with result: {result}")
+            return result
+        except Exception as e:
+            logging.error(f"Error executing contract {contract_id}: {e}")
+            raise e
 
     def save_data(self):
-        cursor = self.db.cursor()
-        data = {
-            'chain': json.dumps(self.chain),
-            'current_transactions': json.dumps(self.current_transactions),
-            'tokens': json.dumps([{
-                'name': token.name,
-                'symbol': token.symbol,
-                'total_supply': token.total_supply,
-                'balances': token.balances
-            } for token in self.tokens])
-        }
-        cursor.execute("DELETE FROM blockchain")
-        cursor.execute("INSERT INTO blockchain (chain, current_transactions, tokens) VALUES (?, ?, ?)",
-                       (data['chain'], data['current_transactions'], data['tokens']))
-        self.db.commit()
+        try:
+            cursor = self.db.cursor()
+            data = {
+                'chain': json.dumps(self.chain),
+                'current_transactions': json.dumps(self.current_transactions),
+                'tokens': json.dumps([{
+                    'name': token.name,
+                    'symbol': token.symbol,
+                    'total_supply': token.total_supply,
+                    'balances': token.balances
+                } for token in self.tokens])
+            }
+            cursor.execute("DELETE FROM blockchain")
+            cursor.execute("INSERT INTO blockchain (chain, current_transactions, tokens) VALUES (?, ?, ?)",
+                           (data['chain'], data['current_transactions'], data['tokens']))
+            self.db.commit()
+            logging.info("Blockchain data saved to database.")
+        except Exception as e:
+            logging.error(f"Error saving data to database: {e}")
 
     def load_data(self):
-        cursor = self.db.cursor()
-        cursor.execute("SELECT chain, current_transactions, tokens FROM blockchain")
-        row = cursor.fetchone()
-        if row:
-            self.chain = json.loads(row[0])
-            self.current_transactions = json.loads(row[1])
-            self.tokens = [Token.from_dict(token) for token in row[2]] if isinstance(row[2], list) else []
-        else:
-            logging.info("No data found, starting fresh.")
+        try:
+            cursor = self.db.cursor()
+            cursor.execute("SELECT chain, current_transactions, tokens FROM blockchain")
+            row = cursor.fetchone()
+            if row:
+                self.chain = json.loads(row[0])
+                self.current_transactions = json.loads(row[1])
+                tokens_data = json.loads(row[2])
+                self.tokens = [Token.from_dict(token) for token in tokens_data] if isinstance(tokens_data, list) else []
+                logging.info("Blockchain data loaded from database.")
+            else:
+                logging.info("No data found in database, starting fresh.")
+        except Exception as e:
+            logging.error(f"Error loading data from database: {e}")
 
     def backup_to_cloud(self):
-        data = {
-            "chain": self.chain,
-            "current_transactions": self.current_transactions,
-            "tokens": [token.to_dict() for token in self.tokens]
-        }
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as temp_file:
-            json.dump(data, temp_file, indent=4)
-            temp_file_path = temp_file.name
-        response = cloudinary.uploader.upload(
-            temp_file_path,
-            resource_type="raw",
-            folder=CLOUDINARY_FOLDER,
-            public_id=f"blockchain_backup_{int(time())}"
-        )
-        logging.info(f"Blockchain backed up to cloud: {response.get('secure_url')}")
+        try:
+            data = {
+                "chain": self.chain,
+                "current_transactions": self.current_transactions,
+                "tokens": [token.to_dict() for token in self.tokens]
+            }
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as temp_file:
+                json.dump(data, temp_file, indent=4)
+                temp_file_path = temp_file.name
+            response = cloudinary.uploader.upload(
+                temp_file_path,
+                resource_type="raw",
+                folder=CLOUDINARY_FOLDER,
+                public_id=f"blockchain_backup_{int(time())}"
+            )
+            logging.info(f"Blockchain backed up to cloud: {response.get('secure_url')}")
+        except Exception as e:
+            logging.error(f"Error backing up to cloud: {e}")
 
     @staticmethod
     def hash(block):
@@ -203,7 +245,11 @@ class Blockchain:
 
     @property
     def last_block(self):
-        return self.chain[-1]
+        return self.chain[-1] if self.chain else None
+
+    def get_pending_transactions(self):
+        """Return the list of current pending transactions."""
+        return self.current_transactions
 
 class Token:
     def __init__(self, name, symbol, total_supply):
@@ -283,4 +329,3 @@ class Wallet:
             return True
         except Exception:
             return False
-
