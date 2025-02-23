@@ -2,13 +2,18 @@ services:
   - type: web
     name: blockchain-app
     env: python
-    region: oregon  # Change region if needed
-    plan: free  # or `starter`, `pro`
+    region: oregon  # Adjust region if needed
+    plan: free  # Can be `starter` or `pro`
+
+    rootDir: backend  # Ensure commands run inside the `backend` directory
+
     buildCommand: >
       apt-get update && apt-get install -y build-essential gcc libopenblas-dev liblapack-dev &&
       pip install --upgrade pip &&
-      pip install -r requirements.txt
-    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT backend.app:app
+      pip install -r config/requirements.txt  # Correct path
+
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT app:app  # Fixed import path
+
     envVars:
       - key: FLASK_ENV
         value: production
@@ -17,4 +22,4 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: PORT
-        value: 5000  # Render assigns a dynamic port, ensure your app uses `os.environ["PORT"]`
+        value: 5000  # Render dynamically assigns ports
