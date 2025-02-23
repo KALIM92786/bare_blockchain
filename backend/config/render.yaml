@@ -4,7 +4,7 @@ services:
     env: python
     region: oregon
     plan: free
-    rootDir: backend  # Ensure this is set to the backend folder
+    rootDir: backend  # Ensure this is set correctly
     buildCommand: >
       pip install --upgrade pip &&
       pip install -r config/requirements.txt

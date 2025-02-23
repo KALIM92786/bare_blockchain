@@ -13,7 +13,11 @@ from cryptography.hazmat.backends import default_backend
 import base64
 import tempfile
 import random  # PoS validator selection
+from validator_expansion import Blockchain as ExtendedBlockchain
+import sys
 from backend.validator_expansion import Blockchain as ExtendedBlockchain
+# The backend prefix is not needed inside the backend/ folder
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

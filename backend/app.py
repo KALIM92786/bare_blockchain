@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 from web3 import Web3
 from validator_expansion import Blockchain as ExtendedBlockchain
+from backend.blockchain import Blockchain, Token
 
 #This dynamically adds backend/ to Python’s module search path. force Python to recognize backend/
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
