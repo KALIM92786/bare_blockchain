@@ -8,10 +8,9 @@ services:
     rootDir: backend  # Ensure commands run inside the `backend` directory
 
     buildCommand: >
-      apt-get update && apt-get install -y build-essential gcc libopenblas-dev liblapack-dev &&
-      pip install --upgrade pip &&
-      pip install -r config/requirements.txt  # Correct path
-
+  apt-get update && apt-get install -y build-essential gcc libopenblas-dev liblapack-dev &&
+  pip install --upgrade pip &&
+  pip install -r backend/config/requirements.txt
     startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT app:app  # Fixed import path
 
     envVars:
