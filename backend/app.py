@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from blockchain import Blockchain, Token
 from urllib.parse import urlparse
 import logging
@@ -12,10 +12,10 @@ from cryptography.hazmat.backends import default_backend
 from web3 import Web3
 from validator_expansion import Blockchain as ExtendedBlockchain
 
-#This dynamically adds backend/ to Python’s module search path. force Python to recognize backend/
+# Ensure the current directory is in the module search path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-# Load environment variables (make sure to create a .env file with API_KEY)
+# Load environment variables (ensure a .env file is present with API_KEY, PRIVATE_KEY, etc.)
 load_dotenv()
 API_KEY = os.getenv("API_KEY", "default_api_key")  # Set your secret key
 
@@ -25,7 +25,6 @@ logging.basicConfig(level=logging.INFO)
 # Load private key at startup (for signing transactions, if needed)
 private_key_path = "private_key.pem"
 private_key_data = None
-
 if os.path.exists(private_key_path):
     with open(private_key_path, "rb") as key_file:
         private_key_data = key_file.read()
@@ -36,6 +35,7 @@ else:
     else:
         logging.error("Error loading private key: No 'private_key.pem' file found and PRIVATE_KEY environment variable is not set.")
         sys.exit(1)
+
 try:
     private_key = load_pem_private_key(
         private_key_data,
@@ -45,6 +45,7 @@ try:
 except Exception as e:
     logging.error(f"Error loading private key: {e}")
     sys.exit(1)
+
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Resource Sharing
 
@@ -54,7 +55,7 @@ blockchain = Blockchain()
 # Alchemy for Ethereum Blockchain Development
 # Connect to Alchemy Ethereum Node
 alchemy_url = "https://eth-mainnet.g.alchemy.com/v2/IIrjVj4cyzUBZNrNVwbuMexxWbcrecKd"
-w3 = Web3(Web3.HTTPProvider('https://eth-mainnet.g.alchemy.com/v2/IIrjVj4cyzUBZNrNVwbuMexxWbcrecKd'))
+w3 = Web3(Web3.HTTPProvider(alchemy_url))
 
 if w3.is_connected():
     print("✅ Successfully connected to Ethereum mainnet via Alchemy!")
@@ -67,14 +68,6 @@ print(f"Latest Ethereum Block: {latest_block}")
 block = w3.eth.get_block(latest_block, full_transactions=True)
 print(block)
 
-# Connect to Hardhat local blockchain
-#web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
-
-#if web3.is_connected():
-#    logging.info("✅ Connected to local Hardhat blockchain!")
-#else:
-#    logging.error("❌ Web3 connection to Hardhat failed")
-
 # Function to load ABI from a file
 def load_abi(filename):
     """Load ABI from a file, extracting the 'abi' key if it exists."""
@@ -85,12 +78,12 @@ def load_abi(filename):
 # Load BareCoin contract ABI and deployed address
 barecoin_abi = load_abi("barecoin_abi.json")
 barecoin_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"  # Update with your deployed BareCoin address
-barecoin_contract = web3.eth.contract(address=barecoin_address, abi=barecoin_abi)
+barecoin_contract = w3.eth.contract(address=barecoin_address, abi=barecoin_abi)
 
 # Load StakingGovernance contract ABI and deployed address
 staking_abi = load_abi("staking_governance_abi.json")
 staking_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"  # Update with your deployed StakingGovernance address
-staking_contract = web3.eth.contract(address=staking_address, abi=staking_abi)
+staking_contract = w3.eth.contract(address=staking_address, abi=staking_abi)
 
 # API key authentication decorator
 def require_api_key(f):
@@ -213,9 +206,8 @@ def execute_contract():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-# New endpoints for backend enhancements
+# Additional endpoints
 
-# 1. Get the latest block in the chain
 @app.route("/block/latest", methods=["GET"])
 def latest_block():
     try:
@@ -225,7 +217,6 @@ def latest_block():
         logging.error(f"Error in /block/latest: {e}")
         return jsonify({"error": str(e)}), 500
 
-# 2. Get pending transactions (those not yet mined into a block)
 @app.route("/transactions/pending", methods=["GET"])
 def pending_transactions():
     try:
@@ -235,7 +226,6 @@ def pending_transactions():
         logging.error(f"Error in /transactions/pending: {e}")
         return jsonify({"error": str(e)}), 500
 
-# 3. Stake tokens within the blockchain (internal staking, separate from smart contract staking)
 @app.route("/blockchain/stake_tokens", methods=["POST"])
 @require_api_key
 def stake_tokens():
@@ -250,7 +240,6 @@ def stake_tokens():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# Smart contract integration endpoints
 @app.route("/balance/<address>", methods=["GET"])
 def get_balance(address):
     try:
@@ -279,14 +268,14 @@ def stake():
     if not user or amount is None:
         return jsonify({"error": "Missing user or amount"}), 400
     try:
-        nonce = web3.eth.getTransactionCount(user)
+        nonce = w3.eth.getTransactionCount(user)
         tx = staking_contract.functions.stake(amount).buildTransaction({
             'from': user,
             'nonce': nonce,
             'gas': 2000000,
-            'gasPrice': web3.toWei('50', 'gwei')
+            'gasPrice': w3.toWei('50', 'gwei')
         })
-        # For production: sign and send the transaction using web3.eth.account.signTransaction
+        # For production: sign and send the transaction using w3.eth.account.signTransaction
         return jsonify({"message": "Staking transaction built", "tx": tx}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
