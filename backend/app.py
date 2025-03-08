@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, render_template
-from blockchain import Blockchain, Token
+from blockchain import Blockchain, Token, Wallet
 from urllib.parse import urlparse
 import logging
 import sys
@@ -15,9 +15,9 @@ from validator_expansion import Blockchain as ExtendedBlockchain
 # Ensure the current directory is in the module search path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-# Load environment variables (ensure a .env file is present with API_KEY, PRIVATE_KEY, etc.)
+# Load environment variables (ensure .env contains API_KEY, PRIVATE_KEY, etc.)
 load_dotenv()
-API_KEY = os.getenv("API_KEY", "default_api_key")  # Set your secret key
+API_KEY = os.getenv("API_KEY", "default_api_key")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +39,7 @@ else:
 try:
     private_key = load_pem_private_key(
         private_key_data,
-        password=None,  # Set a password if your key is encrypted
+        password=None,
         backend=default_backend()
     )
 except Exception as e:
@@ -47,42 +47,37 @@ except Exception as e:
     sys.exit(1)
 
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing
+CORS(app)
 
-# Instantiate your custom Blockchain
+# Instantiate the Blockchain
 blockchain = Blockchain()
 
-# Alchemy for Ethereum Blockchain Development
-# Connect to Alchemy Ethereum Node
+# Connect to Ethereum via Alchemy
 alchemy_url = "https://eth-mainnet.g.alchemy.com/v2/IIrjVj4cyzUBZNrNVwbuMexxWbcrecKd"
 w3 = Web3(Web3.HTTPProvider(alchemy_url))
-
 if w3.is_connected():
-    print("✅ Successfully connected to Ethereum mainnet via Alchemy!")
+    logging.info("✅ Successfully connected to Ethereum mainnet via Alchemy!")
 else:
-    print("❌ Connection failed")
+    logging.error("❌ Connection to Ethereum via Alchemy failed")
 
 latest_block = w3.eth.block_number
-print(f"Latest Ethereum Block: {latest_block}")
-
-block = w3.eth.get_block(latest_block, full_transactions=True)
-print(block)
+logging.info(f"Latest Ethereum Block: {latest_block}")
+# Optionally, print block details if needed:
+# print(w3.eth.get_block(latest_block, full_transactions=True))
 
 # Function to load ABI from a file
 def load_abi(filename):
-    """Load ABI from a file, extracting the 'abi' key if it exists."""
     with open(filename) as f:
         data = json.load(f)
-        return data.get("abi", data)  # Safe extraction
+        return data.get("abi", data)
 
-# Load BareCoin contract ABI and deployed address
+# Load contract ABIs and addresses (update these addresses as needed)
 barecoin_abi = load_abi("barecoin_abi.json")
-barecoin_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"  # Update with your deployed BareCoin address
+barecoin_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 barecoin_contract = w3.eth.contract(address=barecoin_address, abi=barecoin_abi)
 
-# Load StakingGovernance contract ABI and deployed address
 staking_abi = load_abi("staking_governance_abi.json")
-staking_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"  # Update with your deployed StakingGovernance address
+staking_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 staking_contract = w3.eth.contract(address=staking_address, abi=staking_abi)
 
 # API key authentication decorator
@@ -113,7 +108,9 @@ def index():
 def explorer():
     return render_template('explorer.html')
 
-# Blockchain endpoints from your custom implementation
+# ---------------------------
+# Blockchain API Endpoints
+# ---------------------------
 @app.route("/mine", methods=["GET"])
 def mine():
     try:
@@ -122,18 +119,18 @@ def mine():
         proof = blockchain.proof_of_work(last_proof)
         blockchain.new_transaction(
             sender="0",
-            recipient="your_address",  # Replace with your actual address
+            recipient="your_address",  # Update to actual reward recipient
             amount=1,
             signature="dummy_signature",
             public_key="dummy_public_key"
         )
-        block = blockchain.new_block(previous_hash=blockchain.hash(blockchain.last_block))
+        new_blk = blockchain.new_block(previous_hash=blockchain.hash(blockchain.last_block))
         response = {
             'message': "New Block Forged",
-            'index': block['index'],
-            'transactions': block['transactions'],
-            'proof': block['proof'],
-            'previous_hash': block['previous_hash'],
+            'index': new_blk['index'],
+            'transactions': new_blk['transactions'],
+            'proof': new_blk['proof'],
+            'previous_hash': new_blk['previous_hash'],
         }
         return jsonify(response), 200
     except Exception as e:
@@ -151,18 +148,13 @@ def new_transaction():
             values["sender"], values["recipient"], values["amount"],
             values["signature"], values["public_key"]
         )
-        response = {"message": f"Transaction will be added to Block {index}"}
-        return jsonify(response), 201
+        return jsonify({"message": f"Transaction will be added to Block {index}"}), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
 @app.route("/chain", methods=["GET"])
 def full_chain():
-    response = {
-        "chain": blockchain.chain,
-        "length": len(blockchain.chain),
-    }
-    return jsonify(response), 200
+    return jsonify({"chain": blockchain.chain, "length": len(blockchain.chain)}), 200
 
 @app.route("/nodes/register", methods=["POST"])
 @require_api_key
@@ -177,9 +169,9 @@ def register_nodes():
 
 @app.route("/nodes/resolve", methods=["GET"])
 def resolve_conflicts():
-    response = {"message": "Current chain", "chain": blockchain.chain}
-    return jsonify(response), 200
+    return jsonify({"message": "Current chain", "chain": blockchain.chain}), 200
 
+# Smart Contract endpoints
 @app.route("/smart-contract/deploy", methods=["POST"])
 @require_api_key
 def deploy_contract():
@@ -206,25 +198,23 @@ def execute_contract():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-# Additional endpoints
+# Additional useful endpoints
 
-@app.route("/block/latest", methods=["GET"])
-def latest_block():
+@app.route("/balance/<address>", methods=["GET"])
+def get_balance(address):
     try:
-        block = blockchain.last_block
-        return jsonify(block), 200
+        balance = barecoin_contract.functions.balanceOf(address).call()
+        return jsonify({"balance": balance}), 200
     except Exception as e:
-        logging.error(f"Error in /block/latest: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
 
-@app.route("/transactions/pending", methods=["GET"])
-def pending_transactions():
+@app.route("/staker/<address>", methods=["GET"])
+def get_staker(address):
     try:
-        transactions = blockchain.current_transactions
-        return jsonify(transactions), 200
+        staker = staking_contract.functions.stakers(address).call()
+        return jsonify({"amount": staker[0], "reward": staker[1], "lastStaked": staker[2]}), 200
     except Exception as e:
-        logging.error(f"Error in /transactions/pending: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/blockchain/stake_tokens", methods=["POST"])
 @require_api_key
@@ -240,45 +230,14 @@ def stake_tokens():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/balance/<address>", methods=["GET"])
-def get_balance(address):
+@app.route("/transactions/pending", methods=["GET"])
+def pending_transactions():
     try:
-        balance = barecoin_contract.functions.balanceOf(address).call()
-        return jsonify({"balance": balance}), 200
+        transactions = blockchain.get_pending_transactions()
+        return jsonify(transactions), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/staker/<address>", methods=["GET"])
-def get_staker(address):
-    try:
-        staker = staking_contract.functions.stakers(address).call()
-        return jsonify({
-            "amount": staker[0],
-            "reward": staker[1],
-            "lastStaked": staker[2]
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route("/stake", methods=["POST"])
-def stake():
-    data = request.get_json()
-    user = data.get("user")
-    amount = int(data.get("amount"))  # amount in wei
-    if not user or amount is None:
-        return jsonify({"error": "Missing user or amount"}), 400
-    try:
-        nonce = w3.eth.getTransactionCount(user)
-        tx = staking_contract.functions.stake(amount).buildTransaction({
-            'from': user,
-            'nonce': nonce,
-            'gas': 2000000,
-            'gasPrice': w3.toWei('50', 'gwei')
-        })
-        # For production: sign and send the transaction using w3.eth.account.signTransaction
-        return jsonify({"message": "Staking transaction built", "tx": tx}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        logging.error(f"Error in /transactions/pending: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

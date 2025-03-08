@@ -5,9 +5,9 @@ async function main() {
   const StakingGovernance = await ethers.getContractFactory("StakingGovernance");
   const stakingGovernance = await StakingGovernance.deploy();
 
-  await stakingGovernance.waitForDeployment();  // ✅ Replace .deployed() with .waitForDeployment()
+  await stakingGovernance.waitForDeployment();
 
-  console.log("StakingGovernance deployed to:", await stakingGovernance.getAddress());  // ✅ Use .getAddress()
+  console.log("StakingGovernance deployed to:", await stakingGovernance.getAddress());
 }
 
 main()

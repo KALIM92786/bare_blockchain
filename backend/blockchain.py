@@ -15,10 +15,10 @@ import tempfile
 import random  # PoS validator selection
 from validator_expansion import Blockchain as ExtendedBlockchain
 import sys
-# The backend prefix is not needed inside the backend/ folder
+
+# Set module search path to current directory
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 
 DATABASE_FILE = "blockchain.db"
@@ -66,7 +66,6 @@ class Blockchain:
         logging.info("Database initialized successfully.")
 
     def stake_tokens(self, user, amount):
-        """Allow a user to stake tokens for validator selection."""
         try:
             self.stakes[user] = self.stakes.get(user, 0) + amount
             logging.info(f"{user} staked {amount} tokens.")
@@ -76,7 +75,6 @@ class Blockchain:
             raise e
 
     def select_validator(self):
-        """Randomly select a validator based on their stake."""
         if not self.stakes:
             raise ValueError("No stakes available; no validator can be selected.")
         total_stake = sum(self.stakes.values())
@@ -95,11 +93,10 @@ class Blockchain:
             validator = self.select_validator()
             if validator is None:
                 raise ValueError("No validator available to create a block.")
-            # Add a reward (coinbase) transaction for the selected validator
             reward_transaction = {
                 'sender': "0",
                 'recipient': validator,
-                'amount': 1,  # Set your reward amount
+                'amount': 1,  # Staking reward
                 'timestamp': time(),
                 'metadata': {'reward': True}
             }
@@ -251,7 +248,6 @@ class Blockchain:
         return self.chain[-1] if self.chain else None
 
     def get_pending_transactions(self):
-        """Return the list of current pending transactions."""
         return self.current_transactions
 
 class Token:
