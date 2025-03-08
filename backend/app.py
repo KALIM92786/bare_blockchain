@@ -82,7 +82,7 @@ def load_abi(filename):
         data = json.load(f)
         return data.get("abi", data)  # Safe extraction
 
- Load BareCoin contract ABI and deployed address
+# Load BareCoin contract ABI and deployed address
 barecoin_abi = load_abi("barecoin_abi.json")
 barecoin_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"  # Update with your deployed BareCoin address
 barecoin_contract = web3.eth.contract(address=barecoin_address, abi=barecoin_abi)
