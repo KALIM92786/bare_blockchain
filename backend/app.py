@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request
 from blockchain import Blockchain, Token
 from urllib.parse import urlparse
 import logging
@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 from web3 import Web3
 from validator_expansion import Blockchain as ExtendedBlockchain
-from backend.blockchain import Blockchain, Token
 
 #This dynamically adds backend/ to Python’s module search path. force Python to recognize backend/
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -69,19 +68,19 @@ block = w3.eth.get_block(latest_block, full_transactions=True)
 print(block)
 
 # Connect to Hardhat local blockchain
-web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+#web3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
 
-if web3.is_connected():
-    logging.info("✅ Connected to local Hardhat blockchain!")
-else:
-    logging.error("❌ Web3 connection to Hardhat failed")
+#if web3.is_connected():
+#    logging.info("✅ Connected to local Hardhat blockchain!")
+#else:
+#    logging.error("❌ Web3 connection to Hardhat failed")
 
 # Function to load ABI from a file
-def load_abi(filename):
-    """Load ABI from a file, extracting the 'abi' key if it exists."""
-    with open(filename) as f:
-        data = json.load(f)
-        return data.get("abi", data)  # Safe extraction
+#def load_abi(filename):
+#    """Load ABI from a file, extracting the 'abi' key if it exists."""
+#    with open(filename) as f:
+#        data = json.load(f)
+#        return data.get("abi", data)  # Safe extraction
 
 # Load BareCoin contract ABI and deployed address
 barecoin_abi = load_abi("barecoin_abi.json")
