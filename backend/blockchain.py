@@ -1,3 +1,4 @@
+from consensus.pos import ProofOfStake
 import os
 import json
 import hashlib
@@ -12,7 +13,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 import base64
 import tempfile
-import random  # PoS validator selection
+import random  # For fallback if needed
 from validator_expansion import Blockchain as ExtendedBlockchain
 import sys
 
@@ -38,7 +39,12 @@ class Blockchain:
         self.tokens = []  # List of Token objects
         self.nodes = set()
         self.smart_contracts = {}
-        self.stakes = {}  # Mapping of user to staked amount
+        # Initialize Proof-of-Stake instance
+        self.pos = ProofOfStake()
+        # Optionally, pre-register some validators for testing
+        self.pos.add_stake("0xf39Fd6E51aad88F6F4Ce6aB8827279cffFb92266", 100)
+        self.pos.add_stake("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 50)
+        
         try:
             self.db = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
             self.initialize_database()
@@ -67,7 +73,8 @@ class Blockchain:
 
     def stake_tokens(self, user, amount):
         try:
-            self.stakes[user] = self.stakes.get(user, 0) + amount
+            # You may also update PoS stakes here if desired.
+            self.pos.add_stake(user, amount)
             logging.info(f"{user} staked {amount} tokens.")
             return {"message": f"{user} staked {amount} tokens."}
         except Exception as e:
@@ -75,28 +82,20 @@ class Blockchain:
             raise e
 
     def select_validator(self):
-        if not self.stakes:
-            raise ValueError("No stakes available; no validator can be selected.")
-        total_stake = sum(self.stakes.values())
-        pick = random.uniform(0, total_stake)
-        current = 0
-        for user, stake in self.stakes.items():
-            current += stake
-            if current >= pick:
-                logging.info(f"Validator selected: {user}")
-                return user
-        logging.warning("Validator selection reached end without pick; defaulting to None")
-        return None
+        # Delegate validator selection to the PoS module
+        return self.pos.select_validator()
 
     def new_block(self, previous_hash=None):
         try:
+            # Select a validator using PoS
             validator = self.select_validator()
             if validator is None:
                 raise ValueError("No validator available to create a block.")
+            # Add a reward transaction for the selected validator
             reward_transaction = {
                 'sender': "0",
                 'recipient': validator,
-                'amount': 1,  # Staking reward
+                'amount': 1,  # Staking reward amount
                 'timestamp': time(),
                 'metadata': {'reward': True}
             }
@@ -225,6 +224,7 @@ class Blockchain:
                 "current_transactions": self.current_transactions,
                 "tokens": [token.to_dict() for token in self.tokens]
             }
+            import tempfile
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as temp_file:
                 json.dump(data, temp_file, indent=4)
                 temp_file_path = temp_file.name
@@ -280,6 +280,7 @@ class Token:
 class Wallet:
     @staticmethod
     def generate_keys():
+        from cryptography.hazmat.primitives.asymmetric import rsa
         private_key = rsa.generate_private_key(
             public_exponent=65537, key_size=2048, backend=default_backend()
         )

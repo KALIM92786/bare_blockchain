@@ -1,14 +1,17 @@
 // src/components/StakingForm.js
 import React, { useState } from 'react';
-import { Container, TextField, Button, Typography, Paper } from '@mui/material';
+import { Container, TextField, Button, Typography, Paper, CircularProgress, Alert } from '@mui/material';
 
 const StakingForm = () => {
   const [user, setUser] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleStake = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setMessage('');
     try {
       const res = await fetch('/stake', {
         method: 'POST',
@@ -20,6 +23,8 @@ const StakingForm = () => {
     } catch (error) {
       console.error("Error staking tokens:", error);
       setMessage("Error staking tokens.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,14 +50,14 @@ const StakingForm = () => {
             onChange={(e) => setAmount(e.target.value)}
             required
           />
-          <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 2 }}>
-            Stake
+          <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 2 }} disabled={loading}>
+            {loading ? <CircularProgress size={24} /> : "Stake"}
           </Button>
         </form>
         {message && (
-          <Typography variant="body1" sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mt: 2 }}>
             {message}
-          </Typography>
+          </Alert>
         )}
       </Paper>
     </Container>

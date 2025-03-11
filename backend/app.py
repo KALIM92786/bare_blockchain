@@ -1,28 +1,36 @@
+import os
+import sys
+# Add the parent directory of backend to PYTHONPATH
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from flask import Flask, jsonify, request, render_template
 from blockchain import Blockchain, Token, Wallet
 from urllib.parse import urlparse
 import logging
-import sys
 import json
-import os
 from dotenv import load_dotenv
 from flask_cors import CORS
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.backends import default_backend
 from web3 import Web3
 from validator_expansion import Blockchain as ExtendedBlockchain
+from execution_layer.vm_manager import VMManager
 
-# Ensure the current directory is in the module search path
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+# Create the Flask app before using it in decorators
+app = Flask(__name__)
+CORS(app)
 
-# Load environment variables (ensure .env contains API_KEY, PRIVATE_KEY, etc.)
+# Instantiate the VM Manager after the app is created
+vm_manager = VMManager()
+
+# Load environment variables
 load_dotenv()
 API_KEY = os.getenv("API_KEY", "default_api_key")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Load private key at startup (for signing transactions, if needed)
+# Load private key at startup
 private_key_path = "private_key.pem"
 private_key_data = None
 if os.path.exists(private_key_path):
@@ -46,9 +54,6 @@ except Exception as e:
     logging.error(f"Error loading private key: {e}")
     sys.exit(1)
 
-app = Flask(__name__)
-CORS(app)
-
 # Instantiate the Blockchain
 blockchain = Blockchain()
 
@@ -62,8 +67,6 @@ else:
 
 latest_block = w3.eth.block_number
 logging.info(f"Latest Ethereum Block: {latest_block}")
-# Optionally, print block details if needed:
-# print(w3.eth.get_block(latest_block, full_transactions=True))
 
 # Function to load ABI from a file
 def load_abi(filename):
@@ -107,6 +110,55 @@ def index():
 @app.route("/explorer")
 def explorer():
     return render_template('explorer.html')
+
+# ---------------------------
+# VM Execution Endpoint
+# ---------------------------
+@app.route("/vm/execute", methods=["POST"])
+def execute_vm():
+    data = request.get_json()
+    vm_type = data.get("vm_type")
+    params = data.get("params", [])
+    
+    if not vm_type:
+        return jsonify({"error": "Missing vm_type parameter"}), 400
+    
+    try:
+        result = vm_manager.execute_code(vm_type, *params)
+        return jsonify({"result": result}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------------------------
+# AI Analysis Endpoint
+# ---------------------------
+@app.route("/ai/analyze", methods=["POST"])
+def analyze_transaction():
+    """
+    Expects a JSON payload with a "transaction" key.
+    Example:
+    {
+      "transaction": {
+          "sender": "0x123...",
+          "recipient": "0xabc...",
+          "amount": 500,
+          "metadata": {}
+      }
+    }
+    Returns AI analysis including risk score and recommendation.
+    """
+    data = request.get_json()
+    transaction = data.get("transaction")
+    if not transaction:
+        return jsonify({"error": "Missing transaction data"}), 400
+
+    try:
+        from execution_layer.ai_module import AI_Module
+        ai = AI_Module()
+        analysis = ai.analyze_transaction(transaction)
+        return jsonify({"analysis": analysis}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ---------------------------
 # Blockchain API Endpoints
@@ -198,8 +250,7 @@ def execute_contract():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-# Additional useful endpoints
-
+# Additional endpoints
 @app.route("/balance/<address>", methods=["GET"])
 def get_balance(address):
     try:

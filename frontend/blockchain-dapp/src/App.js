@@ -5,7 +5,9 @@ import { AppBar, Toolbar, Typography, Container, Button } from '@mui/material';
 import Explorer from './components/Explorer';
 import Stakes from './components/Stakes';
 import Transactions from './components/Transactions';
-import StakingForm from './components/StakingForm'; // For staking tokens
+import StakingForm from './components/StakingForm';
+import VmExecutor from "./components/VmExecutor";
+import Dashboard from "./components/Dashboard";
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
           <Button color="inherit" component={Link} to="/stakes">Stakes</Button>
           <Button color="inherit" component={Link} to="/transactions">Transactions</Button>
           <Button color="inherit" component={Link} to="/staking">Stake Tokens</Button>
+          <Button color="inherit" component={Link} to="/vm">VM Executor</Button>
+          <Button color="inherit" component={Link} to="/dashboard">Dashboard</Button>
         </Toolbar>
       </AppBar>
       <Container sx={{ marginTop: 4 }}>
@@ -27,6 +31,8 @@ function App() {
           <Route path="/stakes" element={<Stakes />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/staking" element={<StakingForm />} />
+          <Route path="/vm" element={<VmExecutor />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </Container>
     </Router>
