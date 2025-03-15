@@ -4,10 +4,9 @@ from .move_vm import MoveVM
 
 class VMManager:
     def __init__(self):
-        # Instantiate each VM module
-        self.evm = EVM()             # EVM module should connect to the local node
-        self.wasm = WASM()           # WASM module will warn if example.wasm is not found
-        self.move_vm = MoveVM()      # MoveVM placeholder
+        self.evm = EVM()       # EVM module: dynamic contract interaction enabled
+        self.wasm = WASM()     # WASM module: warns if example.wasm is missing
+        self.move_vm = MoveVM()  # MoveVM placeholder
 
     def execute_code(self, vm_type, *args):
         if vm_type == 'evm':

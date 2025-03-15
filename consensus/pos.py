@@ -32,5 +32,8 @@ class ProofOfStake:
             if current >= pick:
                 logging.info(f"Validator selected: {validator}")
                 return validator
-        # Fallback (shouldn't be reached if stakes > 0)
         return None
+
+    def get_stake(self, validator):
+        """Return the current stake for a given validator."""
+        return self.stakes.get(validator, 0)

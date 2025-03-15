@@ -1,4 +1,3 @@
-// src/components/VmExecutor.js
 import React, { useState } from "react";
 import {
   Box,
@@ -63,7 +62,7 @@ const VmExecutor = () => {
       <Typography variant="h5" gutterBottom>
         VM Executor
       </Typography>
-
+      
       <FormControl fullWidth margin="normal">
         <InputLabel id="vm-type-label">VM Type</InputLabel>
         <Select
@@ -77,7 +76,7 @@ const VmExecutor = () => {
           <MenuItem value="move">Move</MenuItem>
         </Select>
       </FormControl>
-
+      
       <TextField
         label="Parameters (JSON Array)"
         multiline
@@ -89,7 +88,7 @@ const VmExecutor = () => {
         onChange={(e) => setParams(e.target.value)}
         placeholder='e.g., ["0x...", [{"inputs": ...}], "balanceOf", "0x..."]'
       />
-
+      
       <Box sx={{ position: "relative", marginTop: "1rem" }}>
         <Button variant="contained" onClick={handleExecute} disabled={loading} fullWidth>
           Execute
@@ -107,21 +106,21 @@ const VmExecutor = () => {
           />
         )}
       </Box>
-
+      
       {result && (
         <Alert severity="success" sx={{ marginTop: "1rem" }}>
           <Typography variant="subtitle1">Result:</Typography>
           <pre>{JSON.stringify(result, null, 2)}</pre>
         </Alert>
       )}
-
+      
       {error && (
         <Alert severity="error" sx={{ marginTop: "1rem" }}>
           <Typography variant="subtitle1">Error:</Typography>
           <pre>{error}</pre>
         </Alert>
       )}
-
+      
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={4000}
@@ -133,3 +132,4 @@ const VmExecutor = () => {
 };
 
 export default VmExecutor;
+

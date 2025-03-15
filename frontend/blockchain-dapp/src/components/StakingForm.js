@@ -1,21 +1,17 @@
-// src/components/StakingForm.js
 import React, { useState } from 'react';
-import { Container, TextField, Button, Typography, Paper, CircularProgress, Alert } from '@mui/material';
+import { Container, TextField, Button, Typography, Paper } from '@mui/material';
 
 const StakingForm = () => {
   const [user, setUser] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleStake = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage('');
     try {
-      const res = await fetch('/stake', {
+      const res = await fetch("http://localhost:5000/blockchain/stake_tokens", {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': 'YOUR_API_KEY' },
         body: JSON.stringify({ user, amount: parseInt(amount, 10) }),
       });
       const data = await res.json();
@@ -23,8 +19,6 @@ const StakingForm = () => {
     } catch (error) {
       console.error("Error staking tokens:", error);
       setMessage("Error staking tokens.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -50,14 +44,14 @@ const StakingForm = () => {
             onChange={(e) => setAmount(e.target.value)}
             required
           />
-          <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 2 }} disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : "Stake"}
+          <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 2 }}>
+            Stake
           </Button>
         </form>
         {message && (
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Typography variant="body1" sx={{ mt: 2 }}>
             {message}
-          </Alert>
+          </Typography>
         )}
       </Paper>
     </Container>

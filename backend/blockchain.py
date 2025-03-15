@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 import base64
 import tempfile
-import random  # For fallback if needed
+import random
 from validator_expansion import Blockchain as ExtendedBlockchain
 import sys
 
@@ -39,9 +39,9 @@ class Blockchain:
         self.tokens = []  # List of Token objects
         self.nodes = set()
         self.smart_contracts = {}
-        # Initialize Proof-of-Stake instance
+        # Initialize Proof-of-Stake (PoS) module
         self.pos = ProofOfStake()
-        # Optionally, pre-register some validators for testing
+        # Pre-register some validators for testing
         self.pos.add_stake("0xf39Fd6E51aad88F6F4Ce6aB8827279cffFb92266", 100)
         self.pos.add_stake("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 50)
         
@@ -73,29 +73,26 @@ class Blockchain:
 
     def stake_tokens(self, user, amount):
         try:
-            # You may also update PoS stakes here if desired.
             self.pos.add_stake(user, amount)
-            logging.info(f"{user} staked {amount} tokens.")
-            return {"message": f"{user} staked {amount} tokens."}
+            updated_stake = self.pos.get_stake(user)
+            logging.info(f"{user} staked {amount} tokens. Total stake: {updated_stake}")
+            return {"message": f"{user} staked {amount} tokens. Total stake: {updated_stake}"}
         except Exception as e:
             logging.error(f"Error staking tokens for {user}: {e}")
             raise e
 
     def select_validator(self):
-        # Delegate validator selection to the PoS module
         return self.pos.select_validator()
 
     def new_block(self, previous_hash=None):
         try:
-            # Select a validator using PoS
             validator = self.select_validator()
             if validator is None:
                 raise ValueError("No validator available to create a block.")
-            # Add a reward transaction for the selected validator
             reward_transaction = {
                 'sender': "0",
                 'recipient': validator,
-                'amount': 1,  # Staking reward amount
+                'amount': 1,
                 'timestamp': time(),
                 'metadata': {'reward': True}
             }
@@ -224,7 +221,6 @@ class Blockchain:
                 "current_transactions": self.current_transactions,
                 "tokens": [token.to_dict() for token in self.tokens]
             }
-            import tempfile
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".json") as temp_file:
                 json.dump(data, temp_file, indent=4)
                 temp_file_path = temp_file.name

@@ -1,13 +1,11 @@
-// src/components/Transactions.js
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Paper, List, ListItem, ListItemText, CircularProgress } from '@mui/material';
+import { Container, Typography, Paper, List, ListItem, ListItemText } from '@mui/material';
 
 const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/chain')
+    fetch("http://localhost:5000/chain")
       .then(res => res.json())
       .then(data => {
         let allTx = [];
@@ -19,32 +17,24 @@ const Transactions = () => {
           }
         });
         setTransactions(allTx);
-        setLoading(false);
       })
-      .catch(err => {
-        console.error("Error fetching transactions:", err);
-        setLoading(false);
-      });
+      .catch(err => console.error("Error fetching transactions:", err));
   }, []);
 
   return (
     <Container>
       <Typography variant="h4" gutterBottom>Recent Transactions</Typography>
       <Paper elevation={3} sx={{ padding: 2 }}>
-        {loading ? (
-          <CircularProgress />
-        ) : (
-          <List>
-            {transactions.map((tx, index) => (
-              <ListItem key={index} divider>
-                <ListItemText 
-                  primary={`From: ${tx.sender} → To: ${tx.recipient}`} 
-                  secondary={`Amount: ${tx.amount} tokens | Block: ${tx.blockIndex}`} 
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
+        <List>
+          {transactions.map((tx, index) => (
+            <ListItem key={index} divider>
+              <ListItemText 
+                primary={`From: ${tx.sender} → To: ${tx.recipient}`} 
+                secondary={`Amount: ${tx.amount} tokens | Block: ${tx.blockIndex}`} 
+              />
+            </ListItem>
+          ))}
+        </List>
       </Paper>
     </Container>
   );

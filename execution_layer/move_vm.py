@@ -4,7 +4,7 @@ class MoveVM:
 
     def execute(self, script, args):
         try:
-            # Dummy logic - replace with real Move interpreter integration
+            # Dummy logic – Integrate with your actual Move VM implementation.
             return f"MoveVM executed successfully with script: {script} and args: {args}"
         except Exception as e:
             return {"error": str(e)}
