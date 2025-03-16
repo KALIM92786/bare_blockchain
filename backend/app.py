@@ -80,11 +80,11 @@ def load_abi(filename):
 
 # Load contract ABIs and addresses (ensure addresses are in checksum format)
 barecoin_abi = load_abi("barecoin_abi.json")
-barecoin_address = Web3.to_checksum_address("0x5FbDB2315678afecb367f032d93F642f64180aa3")
+barecoin_address = Web3.to_checksum_address("0xf5c3F19c46C2f64761b1d905C59Bc95E8ad839A1")
 barecoin_contract = w3.eth.contract(address=barecoin_address, abi=barecoin_abi)
 
 staking_abi = load_abi("staking_governance_abi.json")
-staking_address = Web3.to_checksum_address("0xe7f1725E7734CE288F8367e1Bb143E90bb3f0512")
+staking_address = Web3.to_checksum_address("0xe55156B28dEBaCC01178950186FE08868D7Fd961")
 staking_contract = w3.eth.contract(address=staking_address, abi=staking_abi)
 
 # API key authentication decorator
