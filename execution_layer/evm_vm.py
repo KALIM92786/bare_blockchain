@@ -1,14 +1,16 @@
+# execution_layer/evm_vm.py
 from web3 import Web3
 import os
 
 class EVM:
-    def __init__(self, rpc_url="http://localhost:8545"):
+    def __init__(self):
+        rpc_url = os.getenv("RPC_URL", "http://localhost:8545")  # Use env variable, default to local for development
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         if self.w3.is_connected():
             print("✅ EVM connected successfully!")
         else:
             raise ConnectionError("❌ EVM connection failed!")
-
+    
     def execute(self, contract_address, abi, method, *args):
         contract = self.w3.eth.contract(address=contract_address, abi=abi)
         try:
@@ -28,3 +30,4 @@ class EVM:
             return receipt
         except Exception as e:
             return {"error": str(e)}
+
